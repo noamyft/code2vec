@@ -53,7 +53,9 @@ public class ExtractFeaturesTask implements Callable<Void> {
 			return;
 		}
 		
-		String toPrint = featuresToString(features);
+                System.out.println();
+//		String toPrint = featuresToString(features);
+                String toPrint = namesToString(features, this.filePath.toString());
 		if (toPrint.length() > 0) {
 			System.out.println(toPrint);				
 		}
@@ -86,6 +88,28 @@ public class ExtractFeaturesTask implements Callable<Void> {
 			}
 			builder.append(toPrint);
 			
+
+			methodsOutputs.add(builder.toString());
+
+		}
+		return StringUtils.join(methodsOutputs, "\n");
+	}
+        
+        public String namesToString(ArrayList<ProgramFeatures> features, String path) {
+		if (features == null || features.isEmpty()) {
+			return Common.EmptyString;
+		}
+
+		List<String> methodsOutputs = new ArrayList<>();
+
+		for (ProgramFeatures singleMethodfeatures : features) {
+			StringBuilder builder = new StringBuilder();
+			
+			String toPrint = Common.EmptyString;
+			toPrint = singleMethodfeatures.getName();
+			builder.append(toPrint);
+                        builder.append(",");
+                        builder.append(path);
 
 			methodsOutputs.add(builder.toString());
 
