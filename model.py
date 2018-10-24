@@ -299,7 +299,7 @@ class Model:
         mask = tf.log(valid_mask)  # (batch, max_contexts)
         mask = tf.expand_dims(mask, axis=2)  # (batch, max_contexts, 1)
         batched_contexts_weights += mask  # (batch, max_contexts, 1)
-        attention_weights = tf.nn.softmax(batched_contexts_weights, axis=1)  # (batch, max_contexts, 1)
+        attention_weights = tf.nn.softmax(batched_contexts_weights, dim=1)  # (batch, max_contexts, 1)
 
         batched_embed = tf.reshape(flat_embed, shape=[-1, max_contexts, self.config.EMBEDDINGS_SIZE * 3])
         weighted_average_contexts = tf.reduce_sum(tf.multiply(batched_embed, attention_weights),
