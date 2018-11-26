@@ -4,6 +4,7 @@ import PathContextReader
 import numpy as np
 import time
 import pickle
+import os
 from common import common, VocabType
 
 
@@ -187,6 +188,89 @@ class Model:
         self.eval_data_lines = None
         return num_correct_predictions / total_predictions, precision, recall, f1
 
+    def evaluate_folder(self):
+        eval_start_time = time.time()
+        if self.eval_queue is None:
+            self.eval_queue = PathContextReader.PathContextReader(word_to_index=self.word_to_index,
+                                                                  path_to_index=self.path_to_index,
+                                                                  target_word_to_index=self.target_word_to_index,
+                                                                  config=self.config, is_evaluating=True)
+            self.eval_placeholder = self.eval_queue.get_input_placeholder()
+            self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op, _, _, _, _ = \
+                self.build_test_graph(self.eval_queue.get_filtered_batches())
+            self.saver = tf.train.Saver()
+
+        if self.config.LOAD_PATH and not self.config.TRAIN_PATH:
+            self.initialize_session_variables(self.sess)
+            self.load_model(self.sess)
+            if self.config.RELEASE:
+                release_name = self.config.LOAD_PATH + '.release'
+                print('Releasing model, output model: %s' % release_name )
+                self.saver.save(self.sess, release_name )
+                return None
+
+        subdirectories = next(os.walk(self.config.TEST_PATH))[1]
+        results = {}
+        for dir in subdirectories:
+            dir = self.config.TEST_PATH + "/" + dir
+            predictions_org, precision_org, recall_org, f1_org = self.evaluate_file(dir + "/original.test.c2v")
+            predictions_mut, precision_mut, recall_mut, f1_mut = self.evaluate_file(dir + "/both.test.c2v")
+            results[dir] = {"mut": {
+                                    "predictions" : predictions_mut, "precision" : precision_mut,
+                                    "recall" : recall_mut, "f1" : f1_mut
+                                },
+                            "org" : {
+                                "predictions": predictions_org, "precision": precision_org,
+                                "recall": recall_org, "f1": f1_org
+                            }}
+
+        elapsed = int(time.time() - eval_start_time)
+        print("Evaluation time: %sH:%sM:%sS" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
+        return results
+
+    def evaluate_file(self, file):
+        if self.eval_data_lines is None:
+            print('Loading test data from: ' + file)
+            self.eval_data_lines = common.load_file_lines(file)
+            print('Done loading test data')
+        with open('log.txt', 'w') as output_file:
+            num_correct_predictions = np.zeros(self.topk)
+            total_predictions = 0
+            total_prediction_batches = 0
+            true_positive, false_positive, false_negative = 0, 0, 0
+            start_time = time.time()
+
+            for batch in common.split_to_batches(self.eval_data_lines, self.config.TEST_BATCH_SIZE):
+                top_words, top_scores, original_names = self.sess.run(
+                    [self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op],
+                    feed_dict={self.eval_placeholder: batch})
+                top_words, original_names = common.binary_to_string_matrix(top_words), common.binary_to_string_matrix(
+                    original_names)
+                # Flatten original names from [[]] to []
+                original_names = [w for l in original_names for w in l]
+
+                num_correct_predictions = self.update_correct_predictions(num_correct_predictions, output_file,
+                                                                          zip(original_names, top_words))
+                true_positive, false_positive, false_negative = self.update_per_subtoken_statistics(
+                    zip(original_names, top_words),
+                    true_positive, false_positive, false_negative)
+
+                total_predictions += len(original_names)
+                total_prediction_batches += 1
+                if total_prediction_batches % self.num_batches_to_log == 0:
+                    elapsed = time.time() - start_time
+                    # start_time = time.time()
+                    self.trace_evaluation(output_file, num_correct_predictions, total_predictions, elapsed,
+                                          len(self.eval_data_lines))
+
+            print('Done testing, epoch reached')
+            output_file.write(str(num_correct_predictions / total_predictions) + '\n')
+
+        precision, recall, f1 = self.calculate_results(true_positive, false_positive, false_negative)
+        del self.eval_data_lines
+        self.eval_data_lines = None
+        return num_correct_predictions / total_predictions, precision, recall, f1
+
     def update_per_subtoken_statistics(self, results, true_positive, false_positive, false_negative):
         for original_name, top_words in results:
             prediction = common.filter_impossible_names(top_words)[0]
@@ -204,9 +288,9 @@ class Model:
 
     @staticmethod
     def calculate_results(true_positive, false_positive, false_negative):
-        precision = true_positive / (true_positive + false_positive)
-        recall = true_positive / (true_positive + false_negative)
-        f1 = 2 * precision * recall / (precision + recall)
+        precision = true_positive / (true_positive + false_positive) if (true_positive + false_positive) > 0 else 0
+        recall = true_positive / (true_positive + false_negative) if (true_positive + false_negative) > 0 else 0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
         return precision, recall, f1
 
     @staticmethod

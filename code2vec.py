@@ -1,3 +1,5 @@
+import pickle
+
 from common import Config, VocabType
 from argparse import ArgumentParser
 from interactive_predict import InteractivePredictor
@@ -10,6 +12,8 @@ if __name__ == '__main__':
                         help="path to preprocessed dataset", required=False)
     parser.add_argument("-te", "--test", dest="test_path",
                         help="path to test file", metavar="FILE", required=False)
+    parser.add_argument("-tfold", "--test_folder", dest="test_folder", action='store_true',
+                        help="set this flag to do test on folder", required=False)
 
     is_training = '--train' in sys.argv or '-tr' in sys.argv
     parser.add_argument("-s", "--save", dest="save_path",
@@ -43,11 +47,19 @@ if __name__ == '__main__':
         model.save_word2vec_format(args.save_t2v, source=VocabType.Target)
         print('Target word vectors saved in word2vec text format in: %s' % args.save_t2v)
     if config.TEST_PATH and not args.data_path:
-        eval_results = model.evaluate()
-        if eval_results is not None:
-            results, precision, recall, f1 = eval_results
-            print(results)
-            print('Precision: ' + str(precision) + ', recall: ' + str(recall) + ', F1: ' + str(f1))
+        if not args.test_folder:
+            eval_results = model.evaluate()
+            if eval_results is not None:
+                results, precision, recall, f1 = eval_results
+                print(results)
+                print('Precision: ' + str(precision) + ', recall: ' + str(recall) + ', F1: ' + str(f1))
+        else:
+            eval_results = model.evaluate_folder()
+            with open('total_results.pickle', 'wb') as handle:
+                pickle.dump(eval_results, handle)
+
+            # print(eval_results)
+
     if args.predict:
         predictor = InteractivePredictor(config, model)
         predictor.predict()
