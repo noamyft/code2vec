@@ -54,6 +54,17 @@ public class FeatureExtractor {
 
 		return programs;
 	}
+        
+        public ArrayList<MethodContent> extractFeaturesMethods() throws ParseException, IOException {
+		m_CompilationUnit = parseFileWithRetries(code);
+		FunctionVisitor functionVisitor = new FunctionVisitor();
+
+		functionVisitor.visit(m_CompilationUnit, null);
+
+		ArrayList<MethodContent> methods = functionVisitor.getMethodContents();
+
+		return methods;
+	}
 
 	private CompilationUnit parseFileWithRetries(String code) throws IOException {
 		final String classPrefix = "public class Test {";

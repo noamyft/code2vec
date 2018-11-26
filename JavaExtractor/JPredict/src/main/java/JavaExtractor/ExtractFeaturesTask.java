@@ -14,6 +14,7 @@ import com.github.javaparser.ast.CompilationUnit;
 
 import JavaExtractor.Common.CommandLineValues;
 import JavaExtractor.Common.Common;
+import JavaExtractor.Common.MethodContent;
 import JavaExtractor.FeaturesEntities.ProgramFeatures;
 
 public class ExtractFeaturesTask implements Callable<Void> {
@@ -54,8 +55,9 @@ public class ExtractFeaturesTask implements Callable<Void> {
 		}
 		
                 System.out.println();
-//		String toPrint = featuresToString(features);
-                String toPrint = namesToString(features, this.filePath.toString());
+                //TODO : change comments here to switch betwenn normal mode and method-name mode
+		String toPrint= featuresToString(features);
+//                String toPrint = namesToString(features, this.filePath.toString());
 		if (toPrint.length() > 0) {
 			System.out.println(toPrint);				
 		}
@@ -64,7 +66,9 @@ public class ExtractFeaturesTask implements Callable<Void> {
 	public ArrayList<ProgramFeatures> extractSingleFile() throws ParseException, IOException {
 		FeatureExtractor featureExtractor = new FeatureExtractor(m_CommandLineValues, code);
 
+                //TODO : change comments here to switch betwenn normal mode and method-name mode
 		ArrayList<ProgramFeatures> features = featureExtractor.extractFeatures();
+//                ArrayList<MethodContent> features = featureExtractor.extractFeaturesMethods();
 
 		m_CompilationUnit = featureExtractor.getParsedFile();
 
@@ -95,14 +99,14 @@ public class ExtractFeaturesTask implements Callable<Void> {
 		return StringUtils.join(methodsOutputs, "\n");
 	}
         
-        public String namesToString(ArrayList<ProgramFeatures> features, String path) {
+        public String namesToString(ArrayList<MethodContent> features, String path) {
 		if (features == null || features.isEmpty()) {
 			return Common.EmptyString;
 		}
 
 		List<String> methodsOutputs = new ArrayList<>();
 
-		for (ProgramFeatures singleMethodfeatures : features) {
+		for (MethodContent singleMethodfeatures : features) {
 			StringBuilder builder = new StringBuilder();
 			
 			String toPrint = Common.EmptyString;
