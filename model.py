@@ -210,18 +210,19 @@ class Model:
                 return None
 
         subdirectories = next(os.walk(self.config.TEST_PATH))[1]
+        print("total methods to test:", len(subdirectories))
         results = {}
         for dir in subdirectories:
             dir = self.config.TEST_PATH + "/" + dir
-            predictions_org, precision_org, recall_org, f1_org = self.evaluate_file(dir + "/original.test.c2v")
-            predictions_mut, precision_mut, recall_mut, f1_mut = self.evaluate_file(dir + "/both.test.c2v")
+            predictions_org, precision_org, recall_org, f1_org, total_predictions_org = self.evaluate_file(dir + "/original.test.c2v")
+            predictions_mut, precision_mut, recall_mut, f1_mut, total_predictions_mut = self.evaluate_file(dir + "/both.test.c2v")
             results[dir] = {"mut": {
                                     "predictions" : predictions_mut, "precision" : precision_mut,
-                                    "recall" : recall_mut, "f1" : f1_mut
+                                    "recall" : recall_mut, "f1" : f1_mut, "total_predictions" : total_predictions_mut
                                 },
                             "org" : {
                                 "predictions": predictions_org, "precision": precision_org,
-                                "recall": recall_org, "f1": f1_org
+                                "recall": recall_org, "f1": f1_org, "total_predictions" : total_predictions_org
                             }}
 
         elapsed = int(time.time() - eval_start_time)
@@ -269,7 +270,7 @@ class Model:
         precision, recall, f1 = self.calculate_results(true_positive, false_positive, false_negative)
         del self.eval_data_lines
         self.eval_data_lines = None
-        return num_correct_predictions / total_predictions, precision, recall, f1
+        return num_correct_predictions / total_predictions, precision, recall, f1, total_predictions
 
     def update_per_subtoken_statistics(self, results, true_positive, false_positive, false_negative):
         for original_name, top_words in results:
