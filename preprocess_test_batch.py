@@ -139,12 +139,10 @@ if __name__ == '__main__':
     #                                                                    max_size=int(args.target_vocab_size),
     #                                                                    return_counts=True)
 
-    num_training_examples = 0
+
     for data_file_path, data_role in zip([test_data_path], ['test']):
         num_examples = process_file(file_path=data_file_path, data_file_role=data_role, dataset_name=args.output_name,
                                     word_to_count=word_to_count, path_to_count=path_to_count,
                                     max_contexts=int(args.max_contexts))
-        if data_role == 'train':
-            num_training_examples = num_examples
 
 
