@@ -213,11 +213,18 @@ class Model:
         print("total methods to test:", len(subdirectories))
         results = {}
         for dir in subdirectories:
+            dirname = dir
             dir = self.config.TEST_PATH + "/" + dir
-            original_results = self.evaluate_file(dir + "/original.test.c2v")
-            mutant_results = self.evaluate_file(dir + "/mutant.test.c2v")
-            results[dir] = {"mutant": mutant_results,
-                            "original": original_results}
+            try:
+                original_results = self.evaluate_file(dir + "/original.test.c2v")
+                mutant_results = self.evaluate_file(dir + "/mutant.test.c2v")
+                results[dir] = {"mutant": mutant_results,
+                                "original": original_results}
+            except tf.errors.InvalidArgumentError as ex:
+                print("ERROR! Cant parse folder: cp -r ", dir, " tt/", dirname)
+                # print(ex)
+                del self.eval_data_lines
+                self.eval_data_lines = None
 
         elapsed = int(time.time() - eval_start_time)
         print("Evaluation time: %sH:%sM:%sS" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
