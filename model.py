@@ -397,9 +397,10 @@ class Model:
                                           shape=(self.config.EMBEDDINGS_SIZE * 3, self.config.EMBEDDINGS_SIZE * 3),
                                           dtype=tf.float32)
 
-        flat_embed = tf.tanh(tf.matmul(flat_embed, transform_param))  # (batch * max_contexts, dim * 3)
+        with tf.device("/cpu:0"):
+            flat_embed = tf.tanh(tf.matmul(flat_embed, transform_param))  # (batch * max_contexts, dim * 3)
 
-        contexts_weights = tf.matmul(flat_embed, attention_param)  # (batch * max_contexts, 1)
+            contexts_weights = tf.matmul(flat_embed, attention_param)  # (batch * max_contexts, 1)
         batched_contexts_weights = tf.reshape(contexts_weights,
                                               [-1, max_contexts, 1])  # (batch, max_contexts, 1)
         mask = tf.log(valid_mask)  # (batch, max_contexts)
@@ -437,8 +438,8 @@ class Model:
                                                                                             source_input, path_input,
                                                                                             target_input,
                                                                                             valid_mask, True)
-
-        cos = tf.matmul(weighted_average_contexts, target_words_vocab)
+        with tf.device("/cpu:0"):
+            cos = tf.matmul(weighted_average_contexts, target_words_vocab)
 
         topk_candidates = tf.nn.top_k(cos, k=tf.minimum(self.topk, self.target_word_vocab_size))
         top_indices = tf.to_int64(topk_candidates.indices)
