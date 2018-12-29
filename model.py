@@ -214,22 +214,17 @@ class Model:
         results = {}
         for dir in subdirectories:
             dir = self.config.TEST_PATH + "/" + dir
-            predictions_org, precision_org, recall_org, f1_org, total_predictions_org = self.evaluate_file(dir + "/original.test.c2v")
-            predictions_mut, precision_mut, recall_mut, f1_mut, total_predictions_mut = self.evaluate_file(dir + "/both.test.c2v")
-            results[dir] = {"mut": {
-                                    "predictions" : predictions_mut, "precision" : precision_mut,
-                                    "recall" : recall_mut, "f1" : f1_mut, "total_predictions" : total_predictions_mut
-                                },
-                            "org" : {
-                                "predictions": predictions_org, "precision": precision_org,
-                                "recall": recall_org, "f1": f1_org, "total_predictions" : total_predictions_org
-                            }}
+            original_results = self.evaluate_file(dir + "/original.test.c2v")
+            mutant_results = self.evaluate_file(dir + "/mutant.test.c2v")
+            results[dir] = {"mutant": mutant_results,
+                            "original": original_results}
 
         elapsed = int(time.time() - eval_start_time)
         print("Evaluation time: %sH:%sM:%sS" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
         return results
 
     def evaluate_file(self, file):
+        results = []
         if self.eval_data_lines is None:
             print('Loading test data from: ' + file)
             self.eval_data_lines = common.load_file_lines(file)
@@ -241,7 +236,12 @@ class Model:
             true_positive, false_positive, false_negative = 0, 0, 0
             start_time = time.time()
 
-            for batch in common.split_to_batches(self.eval_data_lines, self.config.TEST_BATCH_SIZE):
+            for batch in common.split_to_batches(self.eval_data_lines, 1):
+                num_correct_predictions = np.zeros(self.topk)
+                total_predictions = 0
+
+                true_positive, false_positive, false_negative = 0, 0, 0
+
                 top_words, top_scores, original_names = self.sess.run(
                     [self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op],
                     feed_dict={self.eval_placeholder: batch})
@@ -258,6 +258,9 @@ class Model:
 
                 total_predictions += len(original_names)
                 total_prediction_batches += 1
+
+                results.append({"TP":true_positive, "FP":false_positive, "FN":false_negative,
+                                "num_correct_predictions": num_correct_predictions, "total_predictions":total_predictions})
                 if total_prediction_batches % self.num_batches_to_log == 0:
                     elapsed = time.time() - start_time
                     # start_time = time.time()
@@ -267,10 +270,10 @@ class Model:
             print('Done testing, epoch reached')
             output_file.write(str(num_correct_predictions / total_predictions) + '\n')
 
-        precision, recall, f1 = self.calculate_results(true_positive, false_positive, false_negative)
+        # precision, recall, f1 = self.calculate_results(true_positive, false_positive, false_negative)
         del self.eval_data_lines
         self.eval_data_lines = None
-        return num_correct_predictions / total_predictions, precision, recall, f1, total_predictions
+        return results
 
     def update_per_subtoken_statistics(self, results, true_positive, false_positive, false_negative):
         for original_name, top_words in results:
