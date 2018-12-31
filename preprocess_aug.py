@@ -5,7 +5,7 @@ import sys
 CONTINUE_PROCESS=True
 PYTHON="python3"
 EXTRACTOR="JavaExtractor/extract.py"
-NUM_THREADS=4
+NUM_THREADS=1
 REMOVE="rm"
 # REMOVE="del"
 
@@ -38,5 +38,5 @@ if __name__ == "__main__":
     mypath = sys.argv[1]
     alldirs = [os.path.join(mypath, f).replace("\\", "/") for f in os.listdir(mypath) if os.path.isdir(os.path.join(mypath, f))]
 
-    pool = mp.Pool(processes=mp.cpu_count())
+    pool = mp.Pool(processes=10)#mp.cpu_count())
     pool.map(preprocess_dir, alldirs)
