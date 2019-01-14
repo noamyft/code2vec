@@ -216,10 +216,13 @@ class Model:
             dirname = dir
             dir = self.config.TEST_PATH + "/" + dir
             try:
-                original_results = self.evaluate_file(dir + "/original.test.c2v")
-                mutant_results = self.evaluate_file(dir + "/mutant.test.c2v")
-                results[dir] = {"mutant": mutant_results,
-                                "original": original_results}
+                # original_results = self.evaluate_file(dir + "/original.test.c2v")
+                samples = {}
+                onlyfiles = [f for f in os.listdir(dir) if os.path.isfile(os.path.join(dir, f))]
+                for f in onlyfiles:
+                    samples[f] = self.evaluate_file(dir + "/" + f)
+
+                results[dir] = samples
             except tf.errors.InvalidArgumentError as ex:
                 print("ERROR! Cant parse folder: cp -r ", dir, " tt/", dirname)
                 # print(ex)
