@@ -223,7 +223,7 @@ class Model:
                     samples[f] = self.evaluate_file(dir + "/" + f)
 
                 results[dir] = samples
-            except tf.errors.InvalidArgumentError as ex:
+            except Exception as ex:
                 print("ERROR! Cant parse folder: cp -r ", dir, " tt/", dirname)
                 # print(ex)
                 del self.eval_data_lines
