@@ -18,7 +18,8 @@ def preprocess_dir(path:str):
 
     for f in os.listdir(path + "/src"):
         f_name = f[:-5]
-        if (not CONTINUE_PROCESS) or (not os.path.exists(os.path.join(path, f_name, ".test.c2v"))):
+        print(os.path.exists(os.path.join(path, f_name + ".test.c2v")))
+        if (not CONTINUE_PROCESS) or (not os.path.exists(os.path.join(path, f_name + ".test.c2v"))):
             f_absolutepath = os.path.join(path, "src", f)
             #extract paths
             os.system(
@@ -45,5 +46,5 @@ if __name__ == "__main__":
     mypath = sys.argv[1]
     alldirs = [os.path.join(mypath, f).replace("\\", "/") for f in os.listdir(mypath) if os.path.isdir(os.path.join(mypath, f))]
 
-    pool = mp.Pool(processes=1)#mp.cpu_count())
+    pool = mp.Pool(processes=mp.cpu_count())
     pool.map(preprocess_dir, alldirs)
