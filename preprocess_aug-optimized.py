@@ -18,7 +18,6 @@ def preprocess_dir(path:str):
 
     for f in os.listdir(path + "/src"):
         f_name = f[:-5]
-        print(os.path.exists(os.path.join(path, f_name + ".test.c2v")))
         if (not CONTINUE_PROCESS) or (not os.path.exists(os.path.join(path, f_name + ".test.c2v"))):
             f_absolutepath = os.path.join(path, "src", f)
             #extract paths
