@@ -75,7 +75,7 @@ def process_file(file_path, data_file_role, dataset_name, word_to_count, path_to
                 outfile.write(target_name + ' ' + " ".join(contexts) + csv_padding + '\n')
                 total += 1
 
-    print('File: ' + data_file_path)
+    print('File: ' + file_path)
     print('Average total contexts: ' + str(float(sum_total) / total if total > 0 else 0))
     print('Average final (after sampling) contexts: ' + str(float(sum_sampled) / total if total > 0 else 0))
     print('Total examples: ' + str(total))
