@@ -24,7 +24,7 @@ def preprocess_dir(path:str):
         #         os.remove(path + "/augtemporigin")
         # else: # analyize mutants
         f_name = f[:-5]
-        if (not CONTINUE_PROCESS) or (not os.path.exists(os.path.join(path, f_name, ".test.c2v"))):
+        if (not CONTINUE_PROCESS) or (not os.path.exists(os.path.join(path, f_name + ".test.c2v"))):
             f_absolutepath = os.path.join(path, "src", f)
             os.system(
                 PYTHON + " " + EXTRACTOR + " --file " + f_absolutepath + " --max_path_length 8 --max_path_width 2 --num_threads " + str(
