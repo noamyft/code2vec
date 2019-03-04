@@ -10,7 +10,7 @@ NUM_THREADS=1
 REMOVE="rm"
 # REMOVE="del"
 
-dictionaries_path = "data/java14m/java14m"
+dictionaries_path = "data/java-large/java-large"
 word_to_count, path_to_count, target_to_count, num_training_examples = \
         preprocess_test_batch.load_dictionaries(dictionaries_path)
 
