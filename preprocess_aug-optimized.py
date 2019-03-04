@@ -35,8 +35,6 @@ def preprocess_dir(path:str):
                                             dataset_name=output_name,
                                             word_to_count=word_to_count, path_to_count=path_to_count,
                                             max_contexts=int(max_contexts))
-            # os.system(PYTHON + " preprocess_test_batch.py --test_data " +
-            #           path + "/" + f_name + "tempmut --max_contexts 200 --dict_file data/java14m/java14m --output_name " + path + "/" + f_name)
 
             os.remove(path + "/" + f_name + "tempmut")
 

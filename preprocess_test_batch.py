@@ -1,6 +1,7 @@
 import random
 from argparse import ArgumentParser
 import common
+import numpy as np
 import pickle
 
 '''
@@ -29,6 +30,9 @@ def load_dictionaries(dataset_name):
         print('Dictionaries load from: {}'.format(save_dict_file_path))
         return word_to_count, path_to_count, target_to_count, num_training_examples
 
+def sample_contexts(contexts, max_contexts):
+    selected_samples = np.rint(np.linspace(0, len(contexts), max_contexts, endpoint=False)).astype(int)
+    return [contexts[i] for i in selected_samples]
 
 def process_file(file_path, data_file_role, dataset_name, word_to_count, path_to_count, max_contexts):
     sum_total = 0
@@ -57,11 +61,11 @@ def process_file(file_path, data_file_role, dataset_name, word_to_count, path_to
                                               and not context_full_found(context_parts[i], word_to_count,
                                                                          path_to_count)]
                     if len(full_found_contexts) > max_contexts:
-                        contexts = random.sample(full_found_contexts, max_contexts)
+                        contexts = sample_contexts(full_found_contexts, max_contexts)
                     elif len(full_found_contexts) <= max_contexts \
                             and len(full_found_contexts) + len(partial_found_contexts) > max_contexts:
                         contexts = full_found_contexts + \
-                                   random.sample(partial_found_contexts, max_contexts - len(full_found_contexts))
+                                   sample_contexts(partial_found_contexts, max_contexts - len(full_found_contexts))
                     else:
                         contexts = full_found_contexts + partial_found_contexts
 
