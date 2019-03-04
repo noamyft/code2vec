@@ -269,8 +269,16 @@ class Model:
                 total_predictions += len(original_names)
                 total_prediction_batches += 1
 
+                # zip each prediction with its score
+                top_scores_aslist = top_scores.tolist()
+                top_words_with_scores = []
+                for i in range(len(top_words)):
+                    top_words_with_scores.append(list(zip(top_words[i],top_scores_aslist[i])))
+
                 results.append({"TP":true_positive, "FP":false_positive, "FN":false_negative,
-                                "num_correct_predictions": num_correct_predictions, "total_predictions":total_predictions})
+                                "num_correct_predictions": num_correct_predictions,
+                                "total_predictions":total_predictions,
+                                "top_words_with_scores": top_words_with_scores})
                 if total_prediction_batches % self.num_batches_to_log == 0:
                     elapsed = time.time() - start_time
                     # start_time = time.time()
