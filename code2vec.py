@@ -55,7 +55,7 @@ if __name__ == '__main__':
                 print('Precision: ' + str(precision) + ', recall: ' + str(recall) + ', F1: ' + str(f1))
         else:
             eval_results = model.evaluate_folder()
-            with open('total_results.pickle', 'wb') as handle:
+            with open("total_results_" + config.TEST_PATH.replace("/","").replace("\\","") + ".pickle", 'wb') as handle:
                 pickle.dump(eval_results, handle)
 
             # print(eval_results)
