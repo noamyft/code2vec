@@ -1,12 +1,13 @@
 import traceback
 
 from common import common
-from extractor import Extractor
+from realextractor import RealExtractor
 
 SHOW_TOP_CONTEXTS = 10
 MAX_PATH_LENGTH = 8
 MAX_PATH_WIDTH = 2
 JAR_PATH = 'JavaExtractor/JPredict/target/JavaExtractor-0.0.1-SNAPSHOT.jar'
+FULL_DICT_PATH_AND_NAME = 'data/java-large/java-large'
 
 
 class InteractivePredictor:
@@ -16,10 +17,14 @@ class InteractivePredictor:
         model.predict([])
         self.model = model
         self.config = config
-        self.path_extractor = Extractor(config,
+
+        print("PLEASE NOTE: this version of InteractivePredictor use the full dictionary located in:",
+              FULL_DICT_PATH_AND_NAME)
+        self.path_extractor = RealExtractor(config,
                                         jar_path=JAR_PATH,
                                         max_path_length=MAX_PATH_LENGTH,
-                                        max_path_width=MAX_PATH_WIDTH)
+                                        max_path_width=MAX_PATH_WIDTH,
+                                        path_dict_and_name=FULL_DICT_PATH_AND_NAME)
 
     def read_file(self, input_filename):
         with open(input_filename, 'r') as file:
