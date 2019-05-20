@@ -3,6 +3,7 @@ import pickle
 from common import Config, VocabType
 from argparse import ArgumentParser
 from interactive_predict import InteractivePredictor
+from interactive_predict_adversarial_search import InteractivePredictorAdvMonoSearch, InteractivePredictorAdvSimilarSearch
 from model import Model
 import sys
 
@@ -61,6 +62,12 @@ if __name__ == '__main__':
             # print(eval_results)
 
     if args.predict:
-        predictor = InteractivePredictor(config, model)
+
+        # manual adversarial search
+        # predictor = InteractivePredictor(config, model)
+        # automatic search for something
+        predictor = InteractivePredictorAdvMonoSearch(config, model)
+        # automatic search similar name
+        # predictor = InteractivePredictorAdvSimilarSearch(config, model)
         predictor.predict()
     model.close_session()
