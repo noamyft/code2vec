@@ -564,27 +564,37 @@ class Model:
 
         results = []
         for batch in common.split_to_batches(predict_data_lines, 1):
-            loss_of_input, grad_of_input ,adversarial_name, adversarial_index, source_strings,\
-                path_strings, target_strings = self.sess.run(
-                [self.loss_wrt_input, self.grad_wrt_input, self.adversarial_name, self.adversarial_name_index,
-                 self.predict_source_string, self.predict_path_string,
-                 self.predict_path_target_string],
+            # data for gradients
+            (loss_of_input, grad_of_input ,adversarial_name, adversarial_index,
+            # data for gradients & prediction
+            source_strings, path_strings, target_strings,
+            # data for prediction
+            top_words, top_scores, original_names) \
+                = self.sess.run(
+            # tensors for gradients
+            [self.loss_wrt_input, self.grad_wrt_input, self.adversarial_name, self.adversarial_name_index,
+             # tensors for gradients & prediction
+             self.predict_source_string, self.predict_path_string, self.predict_path_target_string,
+             # tensors for prediction
+             self.predict_top_words_op, self.predict_top_values_op, self.predict_original_names_op,
+             ],
                 feed_dict={self.predict_placeholder: batch})
+
 
             adversarial_name = common.binary_to_string_matrix(adversarial_name)
             source_strings, target_strings = common.binary_to_string_list(source_strings), \
                                              common.binary_to_string_list(target_strings)
-            # # Flatten original names from [[]] to []
-            # attention_per_path = self.get_attention_per_path(source_strings, path_strings, target_strings,
-            #                                                  attention_weights)
-            # original_names = [w for l in original_names for w in l]
-            # results.append((original_names[0], top_words[0], top_scores[0], attention_per_path))
 
+            top_words, original_names = common.binary_to_string_matrix(top_words), common.binary_to_string_matrix(
+                original_names)
+            # Flatten original names from [[]] to []
+            original_names = [w for l in original_names for w in l]
+            results.append((original_names[0], top_words[0], top_scores[0], []))
 
         all_strings = np.concatenate([source_strings, target_strings], axis=0)
         all_grads = np.concatenate([grad_of_input[0], grad_of_input[1]], axis=0)
 
-        return loss_of_input, all_strings, all_grads
+        return results, loss_of_input, all_strings, all_grads
 
     def get_words_vocab_embed(self):
         result_words_vocab_embed = self.sess.run(self.words_vocab_embed)

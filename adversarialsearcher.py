@@ -30,17 +30,17 @@ class AdversarialSearcher():
     def create_bfs_node(self, state, level, score):
         return {"state":state, "level":level,"score":score}
 
-    def is_target_found(self, code_paths):
-        results = self.model.predict(code_paths)
-        prediction_results = common.parse_results(results, None, topk=0)
-        method_prediction = prediction_results[0]
+    def is_target_found(self, model_results):
+        results, loss, all_strings, all_grads = model_results
+        # prediction_results = common.parse_results(results, None, topk=0)
+        original_name, predictions, _, _ = results[0]
 
-        return '|'.join(method_prediction.predictions[0]['name']) != method_prediction.original_name
+        return predictions[0] != original_name
 
-    def create_states(self,state, code_path, topk):
+    def create_states(self, state, model_results, topk):
         original_var, new_var = state
 
-        loss, all_strings, all_grads = self.model.calc_loss_and_gradients_wrt_input(code_path)
+        results, loss, all_strings, all_grads = model_results
         indecies_of_var = np.argwhere(all_strings == new_var).flatten()
         grads_of_var = all_grads[indecies_of_var]
         assert grads_of_var.shape[0] > 0
@@ -80,14 +80,16 @@ class AdversarialSearcher():
 
             new_code = self.apply_state(code, current_node["state"])
 
-            if self.is_target_found(new_code):
+            model_results = self.model.calc_loss_and_gradients_wrt_input(new_code)
+
+            if self.is_target_found(model_results):
                 # print("MATCH FOUND!", current_node)
                 # print("Tried (total:", len(close), ") :: ", close)
                 return current_node
 
             # find best renaming
             if current_node["level"] < self.max_depth:
-                new_states = self.create_states(current_node["state"], new_code, self.topk)
+                new_states = self.create_states(current_node["state"], model_results, self.topk)
                 new_nodes = [self.create_bfs_node(state, current_node["level"] + 1, score)
                              for state, score in new_states if not self.state_exist(open, close, state)]
                 open = open + new_nodes
