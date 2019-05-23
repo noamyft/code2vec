@@ -29,7 +29,7 @@ public class ProgramFeatures {
 	@Override
 	public String toString() {
 		StringBuilder stringBuilder = new StringBuilder();
-                stringBuilder.append(varNames.stream().collect(Collectors.joining(","))).append("!");
+                stringBuilder.append(varNames.stream().collect(Collectors.joining(","))).append(" ");
 		stringBuilder.append(name).append(" ");
 		stringBuilder.append(features.stream().map(ProgramRelation::toString).collect(Collectors.joining(" ")));
 
