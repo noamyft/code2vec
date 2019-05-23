@@ -39,6 +39,7 @@ def process_file(file_path, data_file_role, dataset_name, word_to_count, path_to
     with open(output_path, 'w') as outfile:
         with open(file_path, 'r') as file:
             for line in file:
+                vars, line = line.rstrip('\n').split('!')
                 parts = line.rstrip('\n').split(' ')
                 target_name = parts[0]
                 contexts = parts[1:]
@@ -57,7 +58,7 @@ def process_file(file_path, data_file_role, dataset_name, word_to_count, path_to
                 sum_sampled += len(contexts)
 
                 csv_padding = " " * (max_contexts - len(contexts))
-                outfile.write(target_name + ' ' + " ".join(contexts) + csv_padding + '\n')
+                outfile.write(vars + "!" + target_name + ' ' + " ".join(contexts) + csv_padding + '\n')
                 total += 1
 
     print('File: ' + file_path)
