@@ -48,9 +48,10 @@ public class ExtractFeaturesTask implements Callable<Void> {
 		String toPrint = featuresToString(features);
 		if (toPrint.length() > 0) {
 			System.out.println(toPrint);
+                        
 		}
 	}
-
+        
 	public ArrayList<ProgramFeatures> extractSingleFile() throws ParseException, IOException {
 		String code = null;
 		try {
