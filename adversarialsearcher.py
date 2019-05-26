@@ -7,47 +7,127 @@ from gensim.models import KeyedVectors as word2vec
 
 class AdversarialSearcher():
 
-    def __init__(self, topk, max_depth, model):
+    def __init__(self, topk, max_depth, model, code):
         self.topk = topk
         self.max_depth = max_depth
         self.model = model
 
-    def get_init_state(self, code):
-        # TODO: use .tolower when get vars
-        return ("i","i")
 
-    def apply_state(self,code,state):
+        # process data line - get vars
+        var_code_split_index = code.find(" ")
+        self.original_code = code[var_code_split_index + 1:]
+        self.vars = code[:var_code_split_index]
+        if self.vars != "":
+            self.vars = self.vars.lower().split(",")
+
+        # process states
+        if self.can_be_adversarial():
+            # get original name
+            contexts = self.original_code.split(" ")
+            self.original_name = contexts[0]
+
+            # get forbidden words
+            contexts = [c.split(",") for c in contexts[1:] if c != ""]
+            self.forbidden_varnames = set()
+            for tup in contexts:
+                if tup[0] in model.word_to_index:
+                    self.forbidden_varnames.add(model.word_to_index[tup[0]])
+                if tup[2] in model.word_to_index:
+                    self.forbidden_varnames.add(model.word_to_index[tup[2]])
+            self.forbidden_varnames = list(self.forbidden_varnames)
+
+            self.open_state_to_node = {}
+            self.close_state_to_node = {}
+            init_states = [(s, 0) for s in self._get_init_state(self.original_code, self.vars)]
+            self._update_open(init_states, 0)
+
+            current_state, self.current_node = self._select_best_state()
+            del self.open_state_to_node[current_state]
+            self.close_state_to_node[current_state] = self.current_node
+            pass
+
+    def can_be_adversarial(self):
+        return self.vars != ""
+
+    def get_adversarial_code(self):
+        assert self.current_node is not None
+            # return None
+        return self._apply_state(self.original_code, self.current_node["state"])
+
+    def get_original_name(self):
+        return self.original_name
+
+    def get_current_node(self):
+        return self.current_node
+
+    # def get_adversarial_name(self):
+    #     return self.adversarial_code
+
+    def _get_init_state(self, code, variables):
+        # TODO: use .lower when get vars - ans: Done in constructor
+        return [(variables[0],variables[0])]
+
+    def _apply_state(self, code, state):
         original_var, new_var = state
 
-        new_code = code[0].replace(" " + original_var + ",", " " + new_var + ",")\
+        new_code = code.replace(" " + original_var + ",", " " + new_var + ",")\
             .replace("," + original_var + " ", "," + new_var + " ")
 
-        return [new_code]
+        return new_code
 
-    # def rename_var(self, state, src, dst):
-    #     return (src, dst)
-
-    def create_bfs_node(self, state, level, score):
+    def _create_bfs_node(self, state, level, score):
         return {"state":state, "level":level,"score":score}
 
-    def is_target_found(self, model_results):
-        results, loss, all_strings, all_grads = model_results
+    def is_target_found(self, predictions):
+        # results = model_results
         # prediction_results = common.parse_results(results, None, topk=0)
-        original_name, predictions, _, _ = results[0]
+        # original_name, predictions = results[0]
 
-        return predictions[0] != original_name
+        return predictions[0] != self.original_name
 
-    def create_states(self, state, model_results, topk):
+    def next(self, model_grads):
+        # create new states
+        if self.current_node["level"] < self.max_depth:
+            new_states = self._create_states(self.current_node["state"], model_grads, self.topk)
+
+            self._update_open(new_states, self.current_node["level"] + 1)
+
+        # find best renaming
+        if not self.open_state_to_node:
+            return False
+
+        current_state, self.current_node = self._select_best_state()
+        del self.open_state_to_node[current_state]
+        self.close_state_to_node[current_state] = self.current_node
+
+        return True
+
+    def _update_open(self, new_states, new_level):
+
+        new_valid_states = [(state, score) for state, score in new_states
+                        if state not in self.close_state_to_node and
+                            (state not in self.open_state_to_node or score > self.open_state_to_node[state]["score"])]
+
+        new_nodes = {state: self._create_bfs_node(state, new_level, score) for state, score in new_valid_states}
+        self.open_state_to_node.update(new_nodes)
+
+
+    def _create_states(self, state, model_results, topk):
         original_var, new_var = state
 
-        results, loss, all_strings, all_grads = model_results
+        loss, all_strings, all_grads = model_results
         indecies_of_var = np.argwhere(all_strings == new_var).flatten()
         grads_of_var = all_grads[indecies_of_var]
-        assert grads_of_var.shape[0] > 0
+        if grads_of_var.shape[0] == 0:
+            return []
             # print("current loss:",loss)
         total_grad = np.sum(grads_of_var, axis=0)
         # # words to increase loss
-        top_replace_with = np.argsort(total_grad)[::-1][:topk]
+        top_replace_with = np.argsort(total_grad)[::-1]
+        # filter forbidden words
+        top_replace_with = top_replace_with[~np.isin(top_replace_with,self.forbidden_varnames)]
+        # select top-k
+        top_replace_with = top_replace_with[:topk]
             # result = [(i, total_grad[i], self.model.index_to_word[i]) for i in top_replace_with]
             # print("words to increase loss:")
             # print(result)
@@ -58,114 +138,52 @@ class AdversarialSearcher():
 
         return result
 
-    def state_exist(self, open, close, state):
-        a = close + open
-        return any([True for node in a if node["state"] == state])
+    def _select_best_state(self):
+        return max(self.open_state_to_node.items(), key=lambda n: n[1]["score"])
 
 
-    def find_adversarial(self, code):
-        # input_filename = 'Input.java'
-        # MAX_ATTEMPTS = 50
-        # MAX_NODES_TO_OPEN = 10
+#######################################################################################
+    # def rename_var(self, state, src, dst):
+    #     return (src, dst)
+    # def find_adversarial(self):
+    #     # input_filename = 'Input.java'
+    #     # MAX_ATTEMPTS = 50
+    #     # MAX_NODES_TO_OPEN = 10
+    #
+    #     open = [self.create_bfs_node(self._get_init_state(self.code), 0, 0)]
+    #     close =[]
+    #
+    #     # print('Starting interactive prediction with mono adversarial search...')
+    #     while open:
+    #         # open.sort(key=lambda n : -n["score"])
+    #         current_node_index, current_node  = self._select_best_state(open)
+    #         del open[current_node_index]
+    #         close.append(current_node)
+    #
+    #         new_code = self._apply_state(self.code, current_node["state"])
+    #
+    #         # feed forward to evaluate
+    #         results = self.model.predict(new_code)
+    #
+    #         if self.is_target_found(results):
+    #             # print("MATCH FOUND!", current_node)
+    #             # print("Tried (total:", len(close), ") :: ", close)
+    #             return current_node
+    #
+    #         # feed backward to find adversarial
+    #         model_results = self.model.calc_loss_and_gradients_wrt_input(new_code)
+    #
+    #         # find best renaming
+    #         if current_node["level"] < self.max_depth:
+    #             new_states = self._create_states(current_node["state"], model_results, self.topk)
+    #             new_nodes = [self.create_bfs_node(state, current_node["level"] + 1, score)
+    #                          for state, score in new_states if not self._state_exist(open, close, state)]
+    #             open = open + new_nodes
+    #
+    #
+    #     # print("FAILED!")
+    #     # print("Tried (total:", len(close),") :: ", close)
+    #     return None
 
-        open = [self.create_bfs_node(self.get_init_state(code), 0, 0)]
-        close =[]
-
-        # print('Starting interactive prediction with mono adversarial search...')
-        while open:
-            # open.sort(key=lambda n : -n["score"])
-            current_node_index, current_node  = max(enumerate(open), key=lambda n: n[1]["score"])
-            del open[current_node_index]
-            close.append(current_node)
-
-            new_code = self.apply_state(code, current_node["state"])
-
-            model_results = self.model.calc_loss_and_gradients_wrt_input(new_code)
-
-            if self.is_target_found(model_results):
-                # print("MATCH FOUND!", current_node)
-                # print("Tried (total:", len(close), ") :: ", close)
-                return current_node
-
-            # find best renaming
-            if current_node["level"] < self.max_depth:
-                new_states = self.create_states(current_node["state"], model_results, self.topk)
-                new_nodes = [self.create_bfs_node(state, current_node["level"] + 1, score)
-                             for state, score in new_states if not self.state_exist(open, close, state)]
-                open = open + new_nodes
 
 
-        # print("FAILED!")
-        # print("Tried (total:", len(close),") :: ", close)
-        return None
-
-            # print(
-            #     'Modify the file: "%s" and press any key when ready, or "q" / "quit" / "exit" to exit' % input_filename)
-            # user_input = input()
-            # if user_input.lower() in self.exit_keywords:
-            #     print('Exiting...')
-            #     return
-
-            # print("select variable to rename:")
-            # var_to_rename = newname_of_var = input()
-            #
-            # name_found = False
-            # with open(input_filename, "r") as f:
-            #     original_code = f.read()
-            #
-            # for i in range(MAX_ATTEMPTS):
-            #     try:
-            #         predict_lines, hash_to_string_dict = self.path_extractor.extract_paths(input_filename)
-            #     except ValueError as e:
-            #         print(e)
-            #         continue
-            #     results = self.model.predict(predict_lines)
-            #     prediction_results = common.parse_results(results, hash_to_string_dict, topk=SHOW_TOP_CONTEXTS)
-            #     for method_prediction in prediction_results:
-            #         print('Original name:\t' + method_prediction.original_name)
-            #         for name_prob_pair in method_prediction.predictions:
-            #             print('\t(%f) predicted: %s' % (name_prob_pair['probability'], name_prob_pair['name']))
-            #
-            #     if '|'.join(method_prediction.predictions[0]['name']) == method_prediction.original_name:
-            #         print("MATCH FOUND!", newname_of_var)
-            #         print("Tried (total:", len(closed), ") :: ", closed)
-            #         name_found = True
-            #         break
-
-                    # print('Attention:')
-                    # for attention_obj in method_prediction.attention_paths:
-                    #     print('%f\tcontext: %s,%s,%s' % (
-                    #     attention_obj['score'], attention_obj['token1'], attention_obj['path'], attention_obj['token2']))
-
-                # loss, all_strings, all_grads = self.model.calc_loss_and_gradients_wrt_input(predict_lines)
-                # indecies_of_var = np.argwhere(all_strings == newname_of_var.lower()).flatten()
-                # grads_of_var = all_grads[indecies_of_var]
-                # if grads_of_var.shape[0] > 0:
-                #     # print("current loss:",loss)
-                #     total_grad = np.sum(grads_of_var, axis=0)
-                #     # # words to increase loss
-                #     # top_replace_with = np.argsort(total_grad)[::-1][:5]
-                #     # result = [(i, total_grad[i], self.model.index_to_word[i]) for i in top_replace_with]
-                #     # print("words to increase loss:")
-                #     # print(result)
-                #     # words to decrease loss
-                #     top_replace_with = np.argsort(total_grad)[:5]
-                #     result = [(i, total_grad[i], self.model.index_to_word[i]) for i in top_replace_with]
-                #
-                #     # select new name
-                #     for r in result:
-                #         if r[2] not in closed and r[2] != method_prediction.original_name.replace("|",""):
-                #             print(r)
-                #             newname_of_var = r[2]
-                #             break
-                #     else:
-                #         newname_of_var = None
-                #     if newname_of_var is None:
-                #         break
-                #     closed.append(newname_of_var)
-                #
-                #     print("rename", var_to_rename, "to", newname_of_var)
-                #
-                #     code = InteractivePredictor.rename_variable(original_code,var_to_rename,newname_of_var)
-                #     with open("input.java", "w") as f:
-                #         f.write(code)

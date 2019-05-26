@@ -6,6 +6,7 @@ import time
 import pickle
 import os
 from common import common, VocabType
+from adversarialsearcher import AdversarialSearcher
 
 
 class Model:
@@ -297,6 +298,147 @@ class Model:
         self.eval_data_lines = None
         return results
 
+    def evaluate_and_adverse(self, depth, topk):
+        eval_start_time = time.time()
+        if self.eval_queue is None:
+            self.eval_queue = PathContextReader.PathContextReader(word_to_index=self.word_to_index,
+                                                                  path_to_index=self.path_to_index,
+                                                                  target_word_to_index=self.target_word_to_index,
+                                                                  config=self.config, is_evaluating=True)
+            self.eval_placeholder = self.eval_queue.get_input_placeholder()
+            self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op, _, \
+                    self.eval_source_string, _, self.eval_path_target_string= \
+                self.build_test_graph(self.eval_queue.get_filtered_batches())
+            self.saver = tf.train.Saver()
+
+            source_target_tensor = tf.concat([self.eval_source_string, self.eval_path_target_string], axis=1)
+            source_target_onetensor = tf.concat(
+                [tf.expand_dims(self.eval_source_string, axis=0), tf.expand_dims(self.eval_path_target_string, axis=0)],
+                axis=1)
+
+
+
+        if self.grad_wrt_input is None:
+            self.loss_wrt_input, self.grad_wrt_input, self.adversarial_name, self.adversarial_name_index = \
+                self.build_test_graph_with_loss(self.eval_queue.get_filtered_batches(), self.eval_queue)
+
+        if self.config.LOAD_PATH and not self.config.TRAIN_PATH:
+            self.initialize_session_variables(self.sess)
+            self.load_model(self.sess)
+            if self.config.RELEASE:
+                release_name = self.config.LOAD_PATH + '.release'
+                print('Releasing model, output model: %s' % release_name )
+                self.saver.save(self.sess, release_name )
+                return None
+
+        if self.eval_data_lines is None:
+            print('Loading test data from: ' + self.config.TEST_PATH)
+            self.eval_data_lines = common.load_file_lines(self.config.TEST_PATH)
+            print('Done loading test data')
+
+        with open('log.txt', 'w') as output_file:
+            # num_correct_predictions = np.zeros(self.topk)
+            # total_predictions = 0
+            total_fools = 0
+            total_failed = 0
+            # total_prediction_batches = 0
+            # true_positive, false_positive, false_negative = 0, 0, 0
+            start_time = time.time()
+            self.config.TEST_BATCH_SIZE = 20
+            results = []
+            lines_count = len(self.eval_data_lines)
+
+            all_searchers = [ AdversarialSearcher(2,2, self, line) for line in self.eval_data_lines]
+            all_searchers = [[None, se] for se in all_searchers if se.can_be_adversarial()]
+            print("Total adversariable data:", len(all_searchers))
+            batch_searchers =[]
+            while all_searchers or batch_searchers :
+                # load new lines
+                if len(batch_searchers) < self.config.TEST_BATCH_SIZE:
+                    free_slots = self.config.TEST_BATCH_SIZE - len(batch_searchers)
+                    new_batch = all_searchers[:free_slots]
+                    del all_searchers[:free_slots]
+                    batch_searchers += new_batch
+
+                # evaluate step
+                batch_data = [se[1].get_adversarial_code() for se in batch_searchers]
+                top_words, top_scores, original_names = self.sess.run(
+                    [self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op],
+                    feed_dict={self.eval_placeholder: batch_data})
+                top_words, original_names = common.binary_to_string_matrix(
+                    top_words), common.binary_to_string_matrix(
+                    original_names)
+
+                new_batch_data = []
+                new_batch_searchers = []
+                for searcher, one_data, one_top_words in zip(batch_searchers, batch_data, top_words):
+                    one_top_words = common.filter_impossible_names(one_top_words)
+                    if not one_top_words:
+                        output_file.write("code: " + one_data + " with state: " +
+                                          searcher[1].get_current_node() + " cause empty predictions")
+                        continue
+
+                    # save original prediction
+                    if searcher[0] is None:
+                        searcher[0] = one_top_words[0]
+
+                    if searcher[1].is_target_found(one_top_words):
+                        if searcher[0] == searcher[1].get_original_name():
+                            total_fools += 1
+                        results.append({"true_name": searcher[1].get_original_name(),
+                                        "true_prediction": searcher[0],
+                                        "adversarial_prediction": one_top_words,
+                                        "change":searcher[1].get_current_node()})
+                        continue
+
+                    new_batch_searchers.append(searcher)
+                    new_batch_data.append(one_data)
+
+                batch_data = new_batch_data
+                batch_searchers = new_batch_searchers
+
+                # if all methods fails - continue without grad calculation
+                if not batch_searchers:
+                    continue
+
+                # adverse step
+                if len(batch_data) == 1:
+                    source_target_strings = source_target_onetensor
+                else:
+                    source_target_strings = source_target_tensor
+                # loss_of_input, grad_of_input, adversarial_name, adversarial_index, source_strings, target_strings\
+                loss_of_input, grad_of_input, source_target_strings  = self.sess.run(
+                    [self.loss_wrt_input,
+                     tf.concat(self.grad_wrt_input, axis=1),
+                     # self.adversarial_name, self.adversarial_name_index,
+                     source_target_strings],
+                    feed_dict={self.eval_placeholder: batch_data})
+
+                source_target_strings = np.array(common.binary_to_string_matrix(source_target_strings))
+
+                new_batch_searchers = []
+                for searcher, strings, grads in zip(batch_searchers, source_target_strings, grad_of_input):
+                    if not searcher[1].next((0, strings, grads)):
+                        total_failed += 1
+                        results.append({"true_name": searcher[1].get_original_name(),
+                                        "true_prediction": searcher[0],
+                                        "adversarial_prediction": None,
+                                        "change": searcher[1].get_current_node()})
+                        continue
+
+                    new_batch_searchers.append(searcher)
+
+                batch_searchers = new_batch_searchers
+
+            print('Done testing, epoch reached')
+            output_file.write("fools: " + str(total_fools) + " fail to fool: " + str(total_failed) + '\n')
+
+        elapsed = int(time.time() - eval_start_time)
+        print("Evaluation time: %sH:%sM:%sS" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
+        del self.eval_data_lines
+        self.eval_data_lines = None
+        return results
+
     def update_per_subtoken_statistics(self, results, true_positive, false_positive, false_negative):
         for original_name, top_words in results:
             prediction = common.filter_impossible_names(top_words)[0]
@@ -456,7 +598,7 @@ class Model:
 
         return top_words, top_scores, original_words, attention_weights, source_string, path_string, path_target_string
 
-    def build_test_graph_with_loss(self, input_tensors):
+    def build_test_graph_with_loss(self, input_tensors, queue):
         with tf.variable_scope('model', reuse=True):
             words_vocab = tf.get_variable('WORDS_VOCAB', shape=(self.word_vocab_size + 1, self.config.EMBEDDINGS_SIZE),
                                           dtype=tf.float32, trainable=False)
@@ -485,13 +627,15 @@ class Model:
             logits = cos = tf.matmul(weighted_average_contexts, target_words_vocab)
 
             batch_size = tf.to_float(tf.shape(words_input)[0])
-            words_input_index = self.predict_queue.target_word_table.lookup(words_input)
+            words_input_index = queue.target_word_table.lookup(words_input)
 
             original_words = words_input
             original_words_index = words_input_index
-            loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(
+            # loss = tf.reduce_sum(
+            loss =    tf.nn.sparse_softmax_cross_entropy_with_logits(
                 labels=tf.reshape(words_input_index, [-1]),
-                logits=logits)) / batch_size
+                logits=logits)
+            # ) / batch_size
 
             # loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(
             #     labels=tf.reshape(words_input_index, [-1]),
@@ -510,7 +654,13 @@ class Model:
             grad_of_source_input = tf.matmul(grad_source_word_embed, words_vocab, transpose_b=True)
             grad_of_target_input = tf.matmul(grad_target_word_embed, words_vocab, transpose_b=True)
 
-        return loss, [grad_of_source_input,grad_of_target_input], original_words, original_words_index
+            max_contexts = self.config.MAX_CONTEXTS
+            batched_grad_of_source_input = tf.reshape(grad_of_source_input,
+                                                      [-1, max_contexts, words_vocab.shape[0]])
+            batched_grad_of_target_input = tf.reshape(grad_of_target_input,
+                                                      [-1, max_contexts, words_vocab.shape[0]])
+
+        return loss, [batched_grad_of_source_input,batched_grad_of_target_input], original_words, original_words_index
 
     def predict(self, predict_data_lines):
         if self.predict_queue is None:
@@ -560,24 +710,15 @@ class Model:
 
         if self.grad_wrt_input is None:
             self.loss_wrt_input, self.grad_wrt_input, self.adversarial_name, self.adversarial_name_index = \
-                self.build_test_graph_with_loss(self.predict_queue.get_filtered_batches())
+                self.build_test_graph_with_loss(self.predict_queue.get_filtered_batches(), self.predict_queue)
 
         results = []
         for batch in common.split_to_batches(predict_data_lines, 1):
-            # data for gradients
-            (loss_of_input, grad_of_input ,adversarial_name, adversarial_index,
-            # data for gradients & prediction
-            source_strings, path_strings, target_strings,
-            # data for prediction
-            top_words, top_scores, original_names) \
-                = self.sess.run(
-            # tensors for gradients
-            [self.loss_wrt_input, self.grad_wrt_input, self.adversarial_name, self.adversarial_name_index,
-             # tensors for gradients & prediction
-             self.predict_source_string, self.predict_path_string, self.predict_path_target_string,
-             # tensors for prediction
-             self.predict_top_words_op, self.predict_top_values_op, self.predict_original_names_op,
-             ],
+            loss_of_input, grad_of_input, adversarial_name, adversarial_index, source_strings, \
+            path_strings, target_strings = self.sess.run(
+                [self.loss_wrt_input, self.grad_wrt_input, self.adversarial_name, self.adversarial_name_index,
+                 self.predict_source_string, self.predict_path_string,
+                 self.predict_path_target_string],
                 feed_dict={self.predict_placeholder: batch})
 
 
@@ -585,16 +726,10 @@ class Model:
             source_strings, target_strings = common.binary_to_string_list(source_strings), \
                                              common.binary_to_string_list(target_strings)
 
-            top_words, original_names = common.binary_to_string_matrix(top_words), common.binary_to_string_matrix(
-                original_names)
-            # Flatten original names from [[]] to []
-            original_names = [w for l in original_names for w in l]
-            results.append((original_names[0], top_words[0], top_scores[0], []))
-
         all_strings = np.concatenate([source_strings, target_strings], axis=0)
         all_grads = np.concatenate([grad_of_input[0], grad_of_input[1]], axis=0)
 
-        return results, loss_of_input, all_strings, all_grads
+        return loss_of_input, all_strings, all_grads
 
     def get_words_vocab_embed(self):
         result_words_vocab_embed = self.sess.run(self.words_vocab_embed)
