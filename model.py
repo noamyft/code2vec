@@ -344,13 +344,13 @@ class Model:
             # total_prediction_batches = 0
             # true_positive, false_positive, false_negative = 0, 0, 0
             start_time = time.time()
-            self.config.TEST_BATCH_SIZE = 20
             results = []
             lines_count = len(self.eval_data_lines)
 
             all_searchers = [ AdversarialSearcher(2,2, self, line) for line in self.eval_data_lines]
             all_searchers = [[None, se] for se in all_searchers if se.can_be_adversarial()]
             print("Total adversariable data:", len(all_searchers))
+            print("Proccesing in batches of:", self.config.TEST_BATCH_SIZE)
             batch_searchers =[]
             while all_searchers or batch_searchers :
                 # load new lines
