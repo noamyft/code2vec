@@ -38,6 +38,7 @@ class AdversarialSearcher():
 
             self.open_state_to_node = {}
             self.close_state_to_node = {}
+            self.unchecked_nodes = []
             init_states = [(s, 0) for s in self._get_init_state(self.original_code, self.vars)]
             self._update_open(init_states, 0)
 
@@ -53,6 +54,13 @@ class AdversarialSearcher():
         assert self.current_node is not None
             # return None
         return self._apply_state(self.original_code, self.current_node["state"])
+
+    def pop_unchecked_adversarial_code(self):
+
+        res = [(node, self._apply_state(self.original_code, node["state"])) for node in self.unchecked_nodes]
+        del self.unchecked_nodes
+        self.unchecked_nodes = []
+        return res
 
     def get_original_name(self):
         return self.original_name
@@ -109,6 +117,7 @@ class AdversarialSearcher():
                             (state not in self.open_state_to_node or score > self.open_state_to_node[state]["score"])]
 
         new_nodes = {state: self._create_bfs_node(state, new_level, score) for state, score in new_valid_states}
+        self.unchecked_nodes += new_nodes.values()
         self.open_state_to_node.update(new_nodes)
 
 
