@@ -82,6 +82,7 @@ public class FeatureExtractor {
 				continue;
 			ProgramFeatures singleMethodFeatures = generatePathFeaturesForFunction(content);
 			if (!singleMethodFeatures.isEmpty()) {
+                                singleMethodFeatures.setVarNames(content.getVarNames());
 				methodsFeatures.add(singleMethodFeatures);
 			}
 		}

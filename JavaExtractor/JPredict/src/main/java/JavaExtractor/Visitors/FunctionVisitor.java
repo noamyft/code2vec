@@ -10,14 +10,21 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import JavaExtractor.Common.Common;
 import JavaExtractor.Common.MethodContent;
+import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.VariableDeclarationExpr;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 @SuppressWarnings("StringEquality")
 public class FunctionVisitor extends VoidVisitorAdapter<Object> {
 	private ArrayList<MethodContent> m_Methods = new ArrayList<>();
+        
 
 	@Override
 	public void visit(MethodDeclaration node, Object arg) {
-		visitMethod(node, arg);
+                visitMethod(node, arg);
 
 		super.visit(node, arg);
 	}
@@ -35,7 +42,27 @@ public class FunctionVisitor extends VoidVisitorAdapter<Object> {
 		}
 
 		if (node.getBody() != null) {
-			m_Methods.add(new MethodContent(leaves, splitName, getMethodLength(node.getBody().toString())));
+                    MethodContent methodContent = new MethodContent(leaves, splitName, getMethodLength(node.getBody().toString()));
+                    
+                    Set<String> variables = new HashSet<>();
+                    
+                    node.accept(new VoidVisitorAdapter<Void>(){
+                        @Override
+                        public void visit(VariableDeclarationExpr n, Void arg) {
+                            Set<String> myVars = n.getVariables().stream().map(var -> var.getId().getName()).collect(Collectors.toSet());
+                            variables.addAll(myVars);
+                            super.visit(n, arg); //To change body of generated methods, choose Tools | Templates.
+                        }
+                        @Override
+                        public void visit(Parameter n, Void arg) {
+                            variables.add(n.getName());
+                            super.visit(n, arg); //To change body of generated methods, choose Tools | Templates.
+                        }
+                        
+                    } ,null);                    
+                    
+                    methodContent.setVarNames(variables);
+                    m_Methods.add(methodContent);
 		}
 	}
 
