@@ -349,21 +349,31 @@ class Model:
 
             all_searchers = [ AdversarialSearcher(2,2, self, line) for line in self.eval_data_lines]
             all_searchers = [[None, se] for se in all_searchers if se.can_be_adversarial()]
+
+            del self.eval_data_lines
+            self.eval_data_lines = None
+
             print("Total adversariable data:", len(all_searchers))
             print("Proccesing in batches of:", self.config.TEST_BATCH_SIZE)
-            batch_searchers =[]
-            print("\ttrue_name\ttrue_prediction\tadversarial_prediction\tstate")
+            i=0
+            processed = 0
+            batch_searchers = []
+            # print("\ttrue_name\ttrue_prediction\tadversarial_prediction\tstate")
             output_file.write("\ttrue_name\ttrue_prediction\tadversarial_prediction\tstate\n")
             while all_searchers or batch_searchers :
                 # load new lines
                 if len(batch_searchers) < self.config.TEST_BATCH_SIZE:
                     free_slots = self.config.TEST_BATCH_SIZE - len(batch_searchers)
+                    processed += free_slots
                     new_batch = all_searchers[:free_slots]
                     del all_searchers[:free_slots]
                     batch_searchers += new_batch
 
                 # evaluate step
-                batch_data = [se[1].get_adversarial_code() for se in batch_searchers]
+                batch_nodes_data = [(se, n, c) for se in batch_searchers
+                                    for n,c in se[1].pop_unchecked_adversarial_code()]
+                batch_data = [c for _, _, c in batch_nodes_data]
+                # batch_data = [se[1].get_adversarial_code() for se in batch_searchers]
                 top_words, top_scores, original_names = self.sess.run(
                     [self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op],
                     feed_dict={self.eval_placeholder: batch_data})
@@ -371,12 +381,17 @@ class Model:
                     top_words), common.binary_to_string_matrix(
                     original_names)
 
-                new_batch_data = []
+                # new_batch_data = []
                 new_batch_searchers = []
-                for searcher, one_data, one_top_words in zip(batch_searchers, batch_data, top_words):
+                searcher_done = {}
+                for (searcher, node, _), one_top_words in zip(batch_nodes_data, top_words):
+                    # if already found - skip
+                    if searcher[1] in searcher_done:
+                        continue
+
                     one_top_words = common.filter_impossible_names(one_top_words)
                     if not one_top_words:
-                        output_file.write("code: " + one_data + " with state: " +
+                        output_file.write("code with state: " +
                                           searcher[1].get_current_node() + " cause empty predictions\n")
                         continue
 
@@ -387,11 +402,13 @@ class Model:
                     if searcher[1].is_target_found(one_top_words):
                         if searcher[0] == searcher[1].get_original_name():
                             total_fools += 1
+                            searcher_done[searcher[1]] = None
+
                             out = "\t" + searcher[1].get_original_name() +\
                                   "\t" + searcher[0] +\
                                   "\t" + one_top_words[0] + \
                                   "\t" + str(searcher[1].get_current_node())
-                            print(out)
+                            # print(out)
                             output_file.write(out + "\n")
                             # results.append({"true_name": searcher[1].get_original_name(),
                             #                 "true_prediction": searcher[0],
@@ -400,11 +417,11 @@ class Model:
                         continue
 
                     new_batch_searchers.append(searcher)
-                    new_batch_data.append(one_data)
+                    # new_batch_data.append(one_data)
 
-                batch_data = new_batch_data
+                # batch_data = new_batch_data
                 batch_searchers = new_batch_searchers
-
+                batch_data = [se[1].get_adversarial_code() for se in batch_searchers]
                 # if all methods fails - continue without grad calculation
                 if not batch_searchers:
                     continue
@@ -432,7 +449,7 @@ class Model:
                               "\t" + searcher[0] + \
                               "\t" + "--FAIL--" + \
                               "\t" + str(searcher[1].get_current_node())
-                        print(out)
+                        # print(out)
                         output_file.write(out + "\n")
                         # results.append({"true_name": searcher[1].get_original_name(),
                         #                 "true_prediction": searcher[0],
@@ -444,13 +461,18 @@ class Model:
 
                 batch_searchers = new_batch_searchers
 
+                i += 1
+                if i % 10 == 0: #self.num_batches_to_log == 0:
+                    print("batch:", i, "processed:", processed,
+                          "fools: " + str(total_fools) + " fail to fool: " + str(total_failed))
+
             print('Done testing, epoch reached')
             output_file.write("fools: " + str(total_fools) + " fail to fool: " + str(total_failed) + '\n')
 
         elapsed = int(time.time() - eval_start_time)
         print("Evaluation time: %sH:%sM:%sS" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
-        del self.eval_data_lines
-        self.eval_data_lines = None
+        # del self.eval_data_lines
+        # self.eval_data_lines = None
         return results
 
     def update_per_subtoken_statistics(self, results, true_positive, false_positive, false_negative):
