@@ -352,6 +352,8 @@ class Model:
             print("Total adversariable data:", len(all_searchers))
             print("Proccesing in batches of:", self.config.TEST_BATCH_SIZE)
             batch_searchers =[]
+            print("\ttrue_name\ttrue_prediction\tadversarial_prediction\tstate")
+            output_file.write("\ttrue_name\ttrue_prediction\tadversarial_prediction\tstate\n")
             while all_searchers or batch_searchers :
                 # load new lines
                 if len(batch_searchers) < self.config.TEST_BATCH_SIZE:
@@ -375,7 +377,7 @@ class Model:
                     one_top_words = common.filter_impossible_names(one_top_words)
                     if not one_top_words:
                         output_file.write("code: " + one_data + " with state: " +
-                                          searcher[1].get_current_node() + " cause empty predictions")
+                                          searcher[1].get_current_node() + " cause empty predictions\n")
                         continue
 
                     # save original prediction
@@ -385,10 +387,16 @@ class Model:
                     if searcher[1].is_target_found(one_top_words):
                         if searcher[0] == searcher[1].get_original_name():
                             total_fools += 1
-                        results.append({"true_name": searcher[1].get_original_name(),
-                                        "true_prediction": searcher[0],
-                                        "adversarial_prediction": one_top_words,
-                                        "change":searcher[1].get_current_node()})
+                            out = "\t" + searcher[1].get_original_name() +\
+                                  "\t" + searcher[0] +\
+                                  "\t" + one_top_words[0] + \
+                                  "\t" + str(searcher[1].get_current_node())
+                            print(out)
+                            output_file.write(out + "\n")
+                            # results.append({"true_name": searcher[1].get_original_name(),
+                            #                 "true_prediction": searcher[0],
+                            #                 "adversarial_prediction": one_top_words,
+                            #                 "change":searcher[1].get_current_node()})
                         continue
 
                     new_batch_searchers.append(searcher)
@@ -420,10 +428,16 @@ class Model:
                 for searcher, strings, grads in zip(batch_searchers, source_target_strings, grad_of_input):
                     if not searcher[1].next((0, strings, grads)):
                         total_failed += 1
-                        results.append({"true_name": searcher[1].get_original_name(),
-                                        "true_prediction": searcher[0],
-                                        "adversarial_prediction": None,
-                                        "change": searcher[1].get_current_node()})
+                        out = "\t" + searcher[1].get_original_name() + \
+                              "\t" + searcher[0] + \
+                              "\t" + "--FAIL--" + \
+                              "\t" + str(searcher[1].get_current_node())
+                        print(out)
+                        output_file.write(out + "\n")
+                        # results.append({"true_name": searcher[1].get_original_name(),
+                        #                 "true_prediction": searcher[0],
+                        #                 "adversarial_prediction": None,
+                        #                 "change": searcher[1].get_current_node()})
                         continue
 
                     new_batch_searchers.append(searcher)
