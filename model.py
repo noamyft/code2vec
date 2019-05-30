@@ -8,6 +8,7 @@ import os
 from common import common, VocabType
 from adversarialsearcher import AdversarialSearcher
 
+tfe = tf.contrib.eager
 
 class Model:
     topk = 10
@@ -298,7 +299,15 @@ class Model:
         self.eval_data_lines = None
         return results
 
+
+    def my_py_func(self,x):
+        # x = tf.matmul(x, x)  # You can use tf ops
+        print(x.shape[0])  # but it's eager!
+
+        return x
+
     def evaluate_and_adverse(self, depth, topk):
+        ADVERSARIAL_MINI_BATCH_SIZE = 20
         eval_start_time = time.time()
         if self.eval_queue is None:
             self.eval_queue = PathContextReader.PathContextReader(word_to_index=self.word_to_index,
@@ -311,12 +320,12 @@ class Model:
                 self.build_test_graph(self.eval_queue.get_filtered_batches())
             self.saver = tf.train.Saver()
 
-            source_target_tensor = tf.concat([self.eval_source_string, self.eval_path_target_string], axis=1)
-            source_target_onetensor = tf.concat(
+            source_target_tensor = tf.cond(
+                tf.not_equal(tf.size(tf.shape(self.eval_source_string)), 1),
+                lambda : tf.concat([self.eval_source_string, self.eval_path_target_string], axis=1),
+                lambda : tf.concat(
                 [tf.expand_dims(self.eval_source_string, axis=0), tf.expand_dims(self.eval_path_target_string, axis=0)],
-                axis=1)
-
-
+                axis=1))
 
         if self.grad_wrt_input is None:
             self.loss_wrt_input, self.grad_wrt_input, self.adversarial_name, self.adversarial_name_index = \
@@ -337,30 +346,27 @@ class Model:
             print('Done loading test data')
 
         with open('log.txt', 'w') as output_file:
-            # num_correct_predictions = np.zeros(self.topk)
-            # total_predictions = 0
             total_fools = 0
             total_failed = 0
-            # total_prediction_batches = 0
-            # true_positive, false_positive, false_negative = 0, 0, 0
-            start_time = time.time()
             results = []
             lines_count = len(self.eval_data_lines)
 
-            all_searchers = [ AdversarialSearcher(2,2, self, line) for line in self.eval_data_lines]
+            all_searchers = [ AdversarialSearcher(topk,depth, self, line) for line in self.eval_data_lines]
             all_searchers = [[None, se] for se in all_searchers if se.can_be_adversarial()]
 
             del self.eval_data_lines
             self.eval_data_lines = None
 
             print("Total adversariable data:", len(all_searchers))
-            print("Proccesing in batches of:", self.config.TEST_BATCH_SIZE)
+            print("Proccesing in batches of:", self.config.TEST_BATCH_SIZE,
+                  "adversarial mini-batches:", ADVERSARIAL_MINI_BATCH_SIZE)
             i=0
             processed = 0
             batch_searchers = []
             # print("\ttrue_name\ttrue_prediction\tadversarial_prediction\tstate")
             output_file.write("\ttrue_name\ttrue_prediction\tadversarial_prediction\tstate\n")
             while all_searchers or batch_searchers :
+                # s = time.time()
                 # load new lines
                 if len(batch_searchers) < self.config.TEST_BATCH_SIZE:
                     free_slots = self.config.TEST_BATCH_SIZE - len(batch_searchers)
@@ -368,18 +374,21 @@ class Model:
                     new_batch = all_searchers[:free_slots]
                     del all_searchers[:free_slots]
                     batch_searchers += new_batch
-
+                # print("load batch:", time.time()-s)
+                # s = time.time()
                 # evaluate step
                 batch_nodes_data = [(se, n, c) for se in batch_searchers
                                     for n,c in se[1].pop_unchecked_adversarial_code()]
                 batch_data = [c for _, _, c in batch_nodes_data]
                 # batch_data = [se[1].get_adversarial_code() for se in batch_searchers]
+                # top_words, top_scores, original_names = self.sess.run(
                 top_words, top_scores, original_names = self.sess.run(
+                    # [self.eval_top_words_op],
                     [self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op],
                     feed_dict={self.eval_placeholder: batch_data})
-                top_words, original_names = common.binary_to_string_matrix(
-                    top_words), common.binary_to_string_matrix(
-                    original_names)
+                top_words = common.binary_to_string_matrix(top_words)
+                    # , common.binary_to_string_matrix(
+                    # original_names)
 
                 # new_batch_data = []
                 new_batch_searchers = []
@@ -426,48 +435,63 @@ class Model:
                 if not batch_searchers:
                     continue
 
+                # print("eval:", time.time() - s)
+                # s = time.time()
                 # adverse step
-                if len(batch_data) == 1:
-                    source_target_strings = source_target_onetensor
-                else:
-                    source_target_strings = source_target_tensor
-                # loss_of_input, grad_of_input, adversarial_name, adversarial_index, source_strings, target_strings\
-                loss_of_input, grad_of_input, source_target_strings  = self.sess.run(
-                    [self.loss_wrt_input,
-                     tf.concat(self.grad_wrt_input, axis=1),
-                     # self.adversarial_name, self.adversarial_name_index,
-                     source_target_strings],
-                    feed_dict={self.eval_placeholder: batch_data})
-
-                source_target_strings = np.array(common.binary_to_string_matrix(source_target_strings))
-
                 new_batch_searchers = []
-                for searcher, strings, grads in zip(batch_searchers, source_target_strings, grad_of_input):
-                    if not searcher[1].next((0, strings, grads)):
-                        total_failed += 1
-                        out = "\t" + searcher[1].get_original_name() + \
-                              "\t" + searcher[0] + \
-                              "\t" + "--FAIL--" + \
-                              "\t" + str(searcher[1].get_current_node())
-                        # print(out)
-                        output_file.write(out + "\n")
-                        # results.append({"true_name": searcher[1].get_original_name(),
-                        #                 "true_prediction": searcher[0],
-                        #                 "adversarial_prediction": None,
-                        #                 "change": searcher[1].get_current_node()})
-                        continue
 
-                    new_batch_searchers.append(searcher)
+                while batch_data:
+                    mini_batch_searchers = batch_searchers[:ADVERSARIAL_MINI_BATCH_SIZE]
+                    mini_batch_data = batch_data[:ADVERSARIAL_MINI_BATCH_SIZE]
+                    del batch_searchers[:ADVERSARIAL_MINI_BATCH_SIZE]
+                    del batch_data[:ADVERSARIAL_MINI_BATCH_SIZE]
+
+                    # loss_of_input, grad_of_input, adversarial_name, adversarial_index, source_strings, target_strings\
+                    loss_of_input, grad_of_input, source_target_strings  = self.sess.run(
+                        [self.loss_wrt_input,
+                         self.grad_wrt_input,
+                         # self.adversarial_name, self.adversarial_name_index,
+                         source_target_tensor],
+                        feed_dict={self.eval_placeholder: mini_batch_data})
+
+                    source_target_strings = np.array(common.binary_to_string_matrix(source_target_strings))
+
+                    # print("adverse-tf:", time.time() - s)
+                    # s = time.time()
+
+                    for searcher, strings, grads in zip(mini_batch_searchers, source_target_strings, grad_of_input):
+                        if not searcher[1].next((0, strings, grads)):
+                            total_failed += 1
+                            out = "\t" + searcher[1].get_original_name() + \
+                                  "\t" + searcher[0] + \
+                                  "\t" + "--FAIL--" + \
+                                  "\t" + str(searcher[1].get_current_node())
+                            # print(out)
+                            output_file.write(out + "\n")
+                            # results.append({"true_name": searcher[1].get_original_name(),
+                            #                 "true_prediction": searcher[0],
+                            #                 "adversarial_prediction": None,
+                            #                 "change": searcher[1].get_current_node()})
+                            continue
+
+                        new_batch_searchers.append(searcher)
+
+                    # print("adverse-next:", time.time() - s)
+                    # s = time.time()
 
                 batch_searchers = new_batch_searchers
 
-                i += 1
                 if i % 10 == 0: #self.num_batches_to_log == 0:
                     print("batch:", i, "processed:", processed,
-                          "fools: " + str(total_fools) + " fail to fool: " + str(total_failed))
+                          "fools: " + str(total_fools) + " fail to fool: " + str(total_failed) +
+                          " success rate: " + str(total_fools / (total_fools+total_failed)
+                                                                            if total_fools+total_failed > 0 else 0))
+                i += 1
 
             print('Done testing, epoch reached')
-            output_file.write("fools: " + str(total_fools) + " fail to fool: " + str(total_failed) + '\n')
+            output_file.write("fools: " + str(total_fools) + " fail to fool: " + str(total_failed) +
+                              " success rate: " + str(total_fools / (total_fools+total_failed)
+                                                                            if total_fools+total_failed > 0 else 0) + '\n')
 
         elapsed = int(time.time() - eval_start_time)
         print("Evaluation time: %sH:%sM:%sS" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
@@ -685,18 +709,23 @@ class Model:
 
             grad = tf.gradients([loss], [source_word_embed, target_word_embed])
             grad_source_word_embed, grad_target_word_embed = grad
-            grad_source_word_embed = tf.reshape(grad_source_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
-            grad_target_word_embed = tf.reshape(grad_target_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
-            grad_of_source_input = tf.matmul(grad_source_word_embed, words_vocab, transpose_b=True)
-            grad_of_target_input = tf.matmul(grad_target_word_embed, words_vocab, transpose_b=True)
+
+            grad_word_embed = tf.concat([grad_source_word_embed, grad_target_word_embed], axis=1)
+
+            # pf = tfe.py_func(self.my_py_func, [grad_source_word_embed], tf.float32)
+
+            grad_word_embed = tf.reshape(grad_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
+            # grad_target_word_embed = tf.reshape(grad_target_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
+            grad_of_input = tf.matmul(grad_word_embed, words_vocab, transpose_b=True)
+            # grad_of_target_input = tf.matmul(grad_target_word_embed, words_vocab, transpose_b=True)
 
             max_contexts = self.config.MAX_CONTEXTS
-            batched_grad_of_source_input = tf.reshape(grad_of_source_input,
-                                                      [-1, max_contexts, words_vocab.shape[0]])
-            batched_grad_of_target_input = tf.reshape(grad_of_target_input,
-                                                      [-1, max_contexts, words_vocab.shape[0]])
+            batched_grad_of_source_input = tf.reshape(grad_of_input,
+                                                      [-1, 2 * max_contexts, words_vocab.shape[0]])
+            # batched_grad_of_target_input = tf.reshape(grad_of_target_input,
+            #                                           [-1, max_contexts, words_vocab.shape[0]])
 
-        return loss, [batched_grad_of_source_input,batched_grad_of_target_input], original_words, original_words_index
+        return loss, batched_grad_of_source_input, original_words, original_words_index
 
     def predict(self, predict_data_lines):
         if self.predict_queue is None:
