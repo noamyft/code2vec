@@ -489,7 +489,8 @@ class Model:
                 i += 1
 
             print('Done testing, epoch reached')
-            output_file.write("fools: " + str(total_fools) + " fail to fool: " + str(total_failed) +
+            output_file.write("processed: " + str(processed) +
+                              " fools: " + str(total_fools) + " fail to fool: " + str(total_failed) +
                               " success rate: " + str(total_fools / (total_fools+total_failed)
                                                                             if total_fools+total_failed > 0 else 0) + '\n')
 
@@ -716,12 +717,13 @@ class Model:
 
             grad_word_embed = tf.reshape(grad_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
             # grad_target_word_embed = tf.reshape(grad_target_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
-            grad_of_input = tf.matmul(grad_word_embed, words_vocab, transpose_b=True)
+            partial_words_vocab = words_vocab[:10000]
+            grad_of_input = tf.matmul(grad_word_embed, partial_words_vocab, transpose_b=True)
             # grad_of_target_input = tf.matmul(grad_target_word_embed, words_vocab, transpose_b=True)
 
             max_contexts = self.config.MAX_CONTEXTS
             batched_grad_of_source_input = tf.reshape(grad_of_input,
-                                                      [-1, 2 * max_contexts, words_vocab.shape[0]])
+                                                      [-1, 2 * max_contexts, partial_words_vocab.shape[0]])
             # batched_grad_of_target_input = tf.reshape(grad_of_target_input,
             #                                           [-1, max_contexts, words_vocab.shape[0]])
 
