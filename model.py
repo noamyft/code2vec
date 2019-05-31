@@ -321,7 +321,7 @@ class Model:
             self.saver = tf.train.Saver()
 
             source_target_tensor = tf.cond(
-                tf.not_equal(tf.size(tf.shape(self.eval_source_string)), 1),
+                tf.not_equal(tf.rank(self.eval_source_string), 1),
                 lambda : tf.concat([self.eval_source_string, self.eval_path_target_string], axis=1),
                 lambda : tf.concat(
                 [tf.expand_dims(self.eval_source_string, axis=0), tf.expand_dims(self.eval_path_target_string, axis=0)],
@@ -370,7 +370,7 @@ class Model:
                 # load new lines
                 if len(batch_searchers) < self.config.TEST_BATCH_SIZE:
                     free_slots = self.config.TEST_BATCH_SIZE - len(batch_searchers)
-                    processed += free_slots
+                    processed += len(all_searchers[:free_slots])
                     new_batch = all_searchers[:free_slots]
                     del all_searchers[:free_slots]
                     batch_searchers += new_batch
