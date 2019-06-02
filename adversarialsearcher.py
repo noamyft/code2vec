@@ -56,6 +56,8 @@ class AdversarialSearcher():
         return self._apply_state(self.original_code, self.current_node["state"])
 
     def pop_unchecked_adversarial_code(self):
+        if not self.unchecked_nodes:
+            self.unchecked_nodes = [self.current_node]
 
         res = [(node, self._apply_state(self.original_code, node["state"])) for node in self.unchecked_nodes]
         del self.unchecked_nodes
@@ -194,5 +196,74 @@ class AdversarialSearcher():
     #     # print("Tried (total:", len(close),") :: ", close)
     #     return None
 
+class AdversarialTargetedSearcher(AdversarialSearcher):
 
+    def __init__(self, topk, max_depth, model, code, new_target):
+        self.new_target = new_target
+        # replace original name with targeted name
+        start_original_name = code.find(" ") + 1
+        end_original_name = code.find(" ", start_original_name)
+        true_target = code[start_original_name:end_original_name]
+        code = code[:start_original_name] + self.new_target + code[end_original_name:]
+
+        super().__init__(topk, max_depth, model, code)
+        self.original_name = true_target
+
+
+    def is_target_found(self, predictions):
+
+        return predictions[0] == self.new_target
+
+
+
+    def _create_states(self, state, model_results, topk):
+        loss, all_strings, all_grads = model_results
+
+        res = super()._create_states(state,(loss, all_strings, -all_grads),topk)
+
+        return res
+
+
+#######################################################################################
+    # def rename_var(self, state, src, dst):
+    #     return (src, dst)
+    # def find_adversarial(self):
+    #     # input_filename = 'Input.java'
+    #     # MAX_ATTEMPTS = 50
+    #     # MAX_NODES_TO_OPEN = 10
+    #
+    #     open = [self.create_bfs_node(self._get_init_state(self.code), 0, 0)]
+    #     close =[]
+    #
+    #     # print('Starting interactive prediction with mono adversarial search...')
+    #     while open:
+    #         # open.sort(key=lambda n : -n["score"])
+    #         current_node_index, current_node  = self._select_best_state(open)
+    #         del open[current_node_index]
+    #         close.append(current_node)
+    #
+    #         new_code = self._apply_state(self.code, current_node["state"])
+    #
+    #         # feed forward to evaluate
+    #         results = self.model.predict(new_code)
+    #
+    #         if self.is_target_found(results):
+    #             # print("MATCH FOUND!", current_node)
+    #             # print("Tried (total:", len(close), ") :: ", close)
+    #             return current_node
+    #
+    #         # feed backward to find adversarial
+    #         model_results = self.model.calc_loss_and_gradients_wrt_input(new_code)
+    #
+    #         # find best renaming
+    #         if current_node["level"] < self.max_depth:
+    #             new_states = self._create_states(current_node["state"], model_results, self.topk)
+    #             new_nodes = [self.create_bfs_node(state, current_node["level"] + 1, score)
+    #                          for state, score in new_states if not self._state_exist(open, close, state)]
+    #             open = open + new_nodes
+    #
+    #
+    #     # print("FAILED!")
+    #     # print("Tried (total:", len(close),") :: ", close)
+    #     return None
 
