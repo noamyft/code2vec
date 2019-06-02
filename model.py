@@ -6,7 +6,7 @@ import time
 import pickle
 import os
 from common import common, VocabType
-from adversarialsearcher import AdversarialSearcher
+from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher
 
 tfe = tf.contrib.eager
 
@@ -362,6 +362,7 @@ class Model:
                   "adversarial mini-batches:", ADVERSARIAL_MINI_BATCH_SIZE)
             i=0
             processed = 0
+            excluded = 0
             batch_searchers = []
             # print("\ttrue_name\ttrue_prediction\tadversarial_prediction\tstate")
             output_file.write("\ttrue_name\ttrue_prediction\tadversarial_prediction\tstate\n")
@@ -381,7 +382,6 @@ class Model:
                                     for n,c in se[1].pop_unchecked_adversarial_code()]
                 batch_data = [c for _, _, c in batch_nodes_data]
                 # batch_data = [se[1].get_adversarial_code() for se in batch_searchers]
-                # top_words, top_scores, original_names = self.sess.run(
                 top_words, top_scores, original_names = self.sess.run(
                     # [self.eval_top_words_op],
                     [self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op],
@@ -407,29 +407,33 @@ class Model:
                     # save original prediction
                     if searcher[0] is None:
                         searcher[0] = one_top_words[0]
+                        # filter wrong examples (examples that originally predicted wrong)
+                        if searcher[0] != searcher[1].get_original_name():
+                            excluded += 1
+                            continue
 
                     if searcher[1].is_target_found(one_top_words):
-                        if searcher[0] == searcher[1].get_original_name():
-                            total_fools += 1
-                            searcher_done[searcher[1]] = None
+                        total_fools += 1
+                        searcher_done[searcher[1]] = None
 
-                            out = "\t" + searcher[1].get_original_name() +\
-                                  "\t" + searcher[0] +\
-                                  "\t" + one_top_words[0] + \
-                                  "\t" + str(searcher[1].get_current_node())
-                            # print(out)
-                            output_file.write(out + "\n")
-                            # results.append({"true_name": searcher[1].get_original_name(),
-                            #                 "true_prediction": searcher[0],
-                            #                 "adversarial_prediction": one_top_words,
-                            #                 "change":searcher[1].get_current_node()})
+                        out = "\t" + searcher[1].get_original_name() +\
+                              "\t" + searcher[0] +\
+                              "\t" + one_top_words[0] + \
+                              "\t" + str(searcher[1].get_current_node())
+                        # print(out)
+                        output_file.write(out + "\n")
+                        # results.append({"true_name": searcher[1].get_original_name(),
+                        #                 "true_prediction": searcher[0],
+                        #                 "adversarial_prediction": one_top_words,
+                        #                 "change":searcher[1].get_current_node()})
                         continue
 
-                    new_batch_searchers.append(searcher)
+                    if searcher not in new_batch_searchers:
+                        new_batch_searchers.append(searcher)
                     # new_batch_data.append(one_data)
 
                 # batch_data = new_batch_data
-                batch_searchers = new_batch_searchers
+                batch_searchers = [s for s in new_batch_searchers if s[1] not in searcher_done]
                 batch_data = [se[1].get_adversarial_code() for se in batch_searchers]
                 # if all methods fails - continue without grad calculation
                 if not batch_searchers:
@@ -482,14 +486,14 @@ class Model:
                 batch_searchers = new_batch_searchers
 
                 if i % 10 == 0: #self.num_batches_to_log == 0:
-                    print("batch:", i, "processed:", processed,
+                    print("batch:", i, "processed:", processed, "(excluded:", excluded, ")",
                           "fools: " + str(total_fools) + " fail to fool: " + str(total_failed) +
                           " success rate: " + str(total_fools / (total_fools+total_failed)
                                                                             if total_fools+total_failed > 0 else 0))
                 i += 1
 
             print('Done testing, epoch reached')
-            output_file.write("processed: " + str(processed) +
+            output_file.write("processed: " + str(processed) + " (excluded:" + str(excluded) + ")" +
                               " fools: " + str(total_fools) + " fail to fool: " + str(total_failed) +
                               " success rate: " + str(total_fools / (total_fools+total_failed)
                                                                             if total_fools+total_failed > 0 else 0) + '\n')
@@ -660,6 +664,7 @@ class Model:
         return top_words, top_scores, original_words, attention_weights, source_string, path_string, path_target_string
 
     def build_test_graph_with_loss(self, input_tensors, queue):
+        MAX_WORDS_FROM_VOCAB = 10000
         with tf.variable_scope('model', reuse=True):
             words_vocab = tf.get_variable('WORDS_VOCAB', shape=(self.word_vocab_size + 1, self.config.EMBEDDINGS_SIZE),
                                           dtype=tf.float32, trainable=False)
@@ -717,7 +722,7 @@ class Model:
 
             grad_word_embed = tf.reshape(grad_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
             # grad_target_word_embed = tf.reshape(grad_target_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
-            partial_words_vocab = words_vocab[:10000]
+            partial_words_vocab = words_vocab[:MAX_WORDS_FROM_VOCAB]
             grad_of_input = tf.matmul(grad_word_embed, partial_words_vocab, transpose_b=True)
             # grad_of_target_input = tf.matmul(grad_target_word_embed, words_vocab, transpose_b=True)
 
