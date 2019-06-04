@@ -6,6 +6,7 @@ import time
 import pickle
 import os
 from common import common, VocabType
+import adversarialsearcher
 from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher
 
 tfe = tf.contrib.eager
@@ -351,7 +352,15 @@ class Model:
             results = []
             lines_count = len(self.eval_data_lines)
 
-            all_searchers = [ AdversarialSearcher(topk,depth, self, line) for line in self.eval_data_lines]
+            # for deadcode
+            self.eval_data_lines = [adversarialsearcher.overrideVariables(["zpkjxq"], line) for line in self.eval_data_lines]
+
+            # untargeted searcher
+            # all_searchers = [AdversarialSearcher(topk, depth, self, line) for line in self.eval_data_lines]
+            # targeted searcher
+            all_searchers = [ AdversarialTargetedSearcher(topk,depth, self, line, "add") for line in self.eval_data_lines]
+
+
             all_searchers = [[None, se] for se in all_searchers if se.can_be_adversarial()]
 
             del self.eval_data_lines

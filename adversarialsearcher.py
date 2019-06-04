@@ -5,6 +5,10 @@ import re
 from interactive_predict import InteractivePredictor
 from gensim.models import KeyedVectors as word2vec
 
+def overrideVariables(newVarList, code):
+    var_code_split_index = code.find(" ")
+    return ",".join(newVarList) + code[var_code_split_index:]
+
 class AdversarialSearcher():
 
     def __init__(self, topk, max_depth, model, code):
