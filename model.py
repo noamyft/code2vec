@@ -14,10 +14,6 @@ tfe = tf.contrib.eager
 # Hyper-parameters
 MAX_WORDS_FROM_VOCAB = 10000
 ADVERSARIAL_MINI_BATCH_SIZE = 20
-DEADCODE_ATTACK = False
-TARGETED_ATTACK = True
-ADVERSARIAL_TARGET = "add"
-ADVERSE_TP_ONLY = True
 
 class Model:
     topk = 10
@@ -315,7 +311,8 @@ class Model:
 
         return x
 
-    def evaluate_and_adverse(self, depth, topk):
+    def evaluate_and_adverse(self, depth, topk, targeted_attack, adversarial_target_word,
+                             deadcode_attack, adverse_TP_only = True):
 
         eval_start_time = time.time()
         if self.eval_queue is None:
@@ -361,14 +358,19 @@ class Model:
             lines_count = len(self.eval_data_lines)
 
             # for deadcode
-            if DEADCODE_ATTACK:
+            if deadcode_attack:
                 self.eval_data_lines = [adversarialsearcher.overrideVariables(["zpkjxq"], line) for line in self.eval_data_lines]
 
             # untargeted searcher
-            if not TARGETED_ATTACK:
+            if not targeted_attack:
+                print("Using non-targeted attack")
                 all_searchers = [AdversarialSearcher(topk, depth, self, line) for line in self.eval_data_lines]
             else: # targeted searcher
-                all_searchers = [ AdversarialTargetedSearcher(topk,depth, self, line, ADVERSARIAL_TARGET) for line in self.eval_data_lines]
+                print("Using targeted attack. target:", adversarial_target_word)
+                if adversarial_target_word not in self.target_word_to_index:
+                    print(adversarial_target_word, "not existed in vocab!")
+                    return []
+                all_searchers = [AdversarialTargetedSearcher(topk, depth, self, line, adversarial_target_word) for line in self.eval_data_lines]
 
 
             all_searchers = [[None, se] for se in all_searchers if se.can_be_adversarial()]
@@ -382,6 +384,7 @@ class Model:
             i=0
             processed = 0
             excluded = 0
+            trivial = 0
             batch_searchers = []
             # print("\ttrue_name\ttrue_prediction\tadversarial_prediction\tstate")
             output_file.write("\ttrue_name\ttrue_prediction\tadversarial_prediction\tstate\n")
@@ -427,14 +430,16 @@ class Model:
                     if searcher[0] is None:
                         searcher[0] = one_top_words[0]
                         # filter wrong examples (examples that originally predicted wrong)
-                        if ADVERSE_TP_ONLY and searcher[0] != searcher[1].get_original_name():
+                        if adverse_TP_only and searcher[0] != searcher[1].get_original_name():
                             excluded += 1
                             continue
 
                     if searcher[1].is_target_found(one_top_words):
-                        if (not TARGETED_ATTACK) or \
-                                (TARGETED_ATTACK and searcher[1].get_adversarial_name() != searcher[1].get_original_name()):
+                        if (not targeted_attack and searcher[0] == searcher[1].get_original_name()) or \
+                                (targeted_attack and searcher[1].get_adversarial_name() != searcher[1].get_original_name()):
                             total_fools += 1
+                        else:
+                            trivial += 1
 
                         searcher_done[searcher[1]] = None
 
@@ -508,7 +513,7 @@ class Model:
                 batch_searchers = new_batch_searchers
 
                 if i % 10 == 0: #self.num_batches_to_log == 0:
-                    print("batch:", i, "processed:", processed, "(excluded:", excluded, ")",
+                    print("batch:", i, "processed:", processed, "(excluded:", excluded, "trivial:", trivial, ")",
                           "fools: " + str(total_fools) + " fail to fool: " + str(total_failed) +
                           " success rate: " + str(total_fools / (total_fools+total_failed)
                                                                             if total_fools+total_failed > 0 else 0))
@@ -516,11 +521,11 @@ class Model:
 
             print('Done testing, epoch reached')
 
-            print("Final Results:", "processed:", processed, "(excluded:", excluded, ")",
+            print("Final Results:", "processed:", processed, "(excluded:", excluded, "trivial:", trivial, ")",
                           "fools: " + str(total_fools) + " fail to fool: " + str(total_failed) +
                           " success rate: " + str(total_fools / (total_fools+total_failed)
                                                                             if total_fools+total_failed > 0 else 0))
-            output_file.write("processed: " + str(processed) + " (excluded:" + str(excluded) + ")" +
+            output_file.write("processed: " + str(processed) + " (excluded:" + str(excluded) + " trivial:" + str(trivial) + ")" +
                               " fools: " + str(total_fools) + " fail to fool: " + str(total_failed) +
                               " success rate: " + str(total_fools / (total_fools+total_failed)
                                                                             if total_fools+total_failed > 0 else 0) + '\n')

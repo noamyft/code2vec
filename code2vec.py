@@ -62,7 +62,8 @@ if __name__ == '__main__':
                 pickle.dump(eval_results, handle)
             # print(eval_results)
         elif args.test_adversarial:
-            eval_results = model.evaluate_and_adverse(2,2)
+            eval_results = model.evaluate_and_adverse(2, 2, targeted_attack=True, adversarial_target_word="coordinator",
+                                                      deadcode_attack=False)
             with open("total_adversarial_results_" + config.TEST_PATH.replace("/", "").replace("\\", "") + ".pickle",
                       'wb') as handle:
                 pickle.dump(eval_results, handle)
