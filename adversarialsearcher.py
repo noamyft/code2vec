@@ -218,7 +218,8 @@ class AdversarialTargetedSearcher(AdversarialSearcher):
 
         return predictions[0] == self.new_target
 
-
+    def get_adversarial_name(self):
+        return self.new_target
 
     def _create_states(self, state, model_results, topk):
         loss, all_strings, all_grads = model_results

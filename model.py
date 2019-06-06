@@ -11,6 +11,14 @@ from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher
 
 tfe = tf.contrib.eager
 
+# Hyper-parameters
+MAX_WORDS_FROM_VOCAB = 10000
+ADVERSARIAL_MINI_BATCH_SIZE = 20
+DEADCODE_ATTACK = False
+TARGETED_ATTACK = True
+ADVERSARIAL_TARGET = "add"
+ADVERSE_TP_ONLY = True
+
 class Model:
     topk = 10
     num_batches_to_log = 100
@@ -308,7 +316,7 @@ class Model:
         return x
 
     def evaluate_and_adverse(self, depth, topk):
-        ADVERSARIAL_MINI_BATCH_SIZE = 20
+
         eval_start_time = time.time()
         if self.eval_queue is None:
             self.eval_queue = PathContextReader.PathContextReader(word_to_index=self.word_to_index,
@@ -353,12 +361,14 @@ class Model:
             lines_count = len(self.eval_data_lines)
 
             # for deadcode
-            self.eval_data_lines = [adversarialsearcher.overrideVariables(["zpkjxq"], line) for line in self.eval_data_lines]
+            if DEADCODE_ATTACK:
+                self.eval_data_lines = [adversarialsearcher.overrideVariables(["zpkjxq"], line) for line in self.eval_data_lines]
 
             # untargeted searcher
-            # all_searchers = [AdversarialSearcher(topk, depth, self, line) for line in self.eval_data_lines]
-            # targeted searcher
-            all_searchers = [ AdversarialTargetedSearcher(topk,depth, self, line, "add") for line in self.eval_data_lines]
+            if not TARGETED_ATTACK:
+                all_searchers = [AdversarialSearcher(topk, depth, self, line) for line in self.eval_data_lines]
+            else: # targeted searcher
+                all_searchers = [ AdversarialTargetedSearcher(topk,depth, self, line, ADVERSARIAL_TARGET) for line in self.eval_data_lines]
 
 
             all_searchers = [[None, se] for se in all_searchers if se.can_be_adversarial()]
@@ -417,12 +427,15 @@ class Model:
                     if searcher[0] is None:
                         searcher[0] = one_top_words[0]
                         # filter wrong examples (examples that originally predicted wrong)
-                        if searcher[0] != searcher[1].get_original_name():
+                        if ADVERSE_TP_ONLY and searcher[0] != searcher[1].get_original_name():
                             excluded += 1
                             continue
 
                     if searcher[1].is_target_found(one_top_words):
-                        total_fools += 1
+                        if (not TARGETED_ATTACK) or \
+                                (TARGETED_ATTACK and searcher[1].get_adversarial_name() != searcher[1].get_original_name()):
+                            total_fools += 1
+
                         searcher_done[searcher[1]] = None
 
                         out = "\t" + searcher[1].get_original_name() +\
@@ -502,6 +515,11 @@ class Model:
                 i += 1
 
             print('Done testing, epoch reached')
+
+            print("Final Results:", "processed:", processed, "(excluded:", excluded, ")",
+                          "fools: " + str(total_fools) + " fail to fool: " + str(total_failed) +
+                          " success rate: " + str(total_fools / (total_fools+total_failed)
+                                                                            if total_fools+total_failed > 0 else 0))
             output_file.write("processed: " + str(processed) + " (excluded:" + str(excluded) + ")" +
                               " fools: " + str(total_fools) + " fail to fool: " + str(total_failed) +
                               " success rate: " + str(total_fools / (total_fools+total_failed)
@@ -673,7 +691,6 @@ class Model:
         return top_words, top_scores, original_words, attention_weights, source_string, path_string, path_target_string
 
     def build_test_graph_with_loss(self, input_tensors, queue):
-        MAX_WORDS_FROM_VOCAB = 10000
         with tf.variable_scope('model', reuse=True):
             words_vocab = tf.get_variable('WORDS_VOCAB', shape=(self.word_vocab_size + 1, self.config.EMBEDDINGS_SIZE),
                                           dtype=tf.float32, trainable=False)
