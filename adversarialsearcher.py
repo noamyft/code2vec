@@ -1,9 +1,4 @@
-from common import common
-from realextractor import RealExtractor
 import numpy as np
-import re
-from interactive_predict import InteractivePredictor
-from gensim.models import KeyedVectors as word2vec
 
 def overrideVariables(newVarList, code):
     var_code_split_index = code.find(" ")
