@@ -5,6 +5,7 @@ import numpy as np
 import time
 import pickle
 import os
+import random
 from common import common, VocabType
 import adversarialsearcher
 from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher
@@ -366,11 +367,24 @@ class Model:
                 print("Using non-targeted attack")
                 all_searchers = [AdversarialSearcher(topk, depth, self, line) for line in self.eval_data_lines]
             else: # targeted searcher
-                print("Using targeted attack. target:", adversarial_target_word)
-                if adversarial_target_word not in self.target_word_to_index:
-                    print(adversarial_target_word, "not existed in vocab!")
-                    return []
-                all_searchers = [AdversarialTargetedSearcher(topk, depth, self, line, adversarial_target_word) for line in self.eval_data_lines]
+                if adversarial_target_word == "random-uniform":
+                    print("Using targeted attack. target sampled uniform-ly")
+                    get_name = lambda : random.choice(list(self.target_word_to_index.keys()))
+                elif adversarial_target_word == "random-unigram":
+                    print("Using targeted attack. target sampled unigram-ly")
+                    with open(self.get_target_words_histogram_path(self.config.LOAD_PATH), 'rb') as file:
+                        histogram = pickle.load(file)
+
+                    words, weight = list(zip(*histogram.items()))
+
+                    get_name = lambda: random.choices(words, weight)[0]
+                else:
+                    print("Using targeted attack. target:", adversarial_target_word)
+                    if adversarial_target_word not in self.target_word_to_index:
+                        print(adversarial_target_word, "not existed in vocab!")
+                        return []
+                    get_name = lambda: adversarial_target_word
+                all_searchers = [AdversarialTargetedSearcher(topk, depth, self, line, get_name()) for line in self.eval_data_lines]
 
 
             all_searchers = [[None, se] for se in all_searchers if se.can_be_adversarial()]
@@ -850,6 +864,11 @@ class Model:
     @staticmethod
     def get_dictionaries_path(model_file_path):
         dictionaries_save_file_name = "dictionaries.bin"
+        return '/'.join(model_file_path.split('/')[:-1] + [dictionaries_save_file_name])
+
+    @staticmethod
+    def get_target_words_histogram_path(model_file_path):
+        dictionaries_save_file_name = "target_words_histogram.bin"
         return '/'.join(model_file_path.split('/')[:-1] + [dictionaries_save_file_name])
 
     def save_model(self, sess, path):
