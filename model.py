@@ -9,6 +9,7 @@ import random
 from common import common, VocabType
 import adversarialsearcher
 from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher
+from codeguard import guard_by_rename
 
 tfe = tf.contrib.eager
 
@@ -135,7 +136,7 @@ class Model:
                                                                               self.config.BATCH_SIZE * self.num_batches_to_log / (
                                                                                   multi_batch_elapsed if multi_batch_elapsed > 0 else 1)))
 
-    def evaluate(self):
+    def evaluate(self, guard_input=False):
         eval_start_time = time.time()
         if self.eval_queue is None:
             self.eval_queue = PathContextReader.PathContextReader(word_to_index=self.word_to_index,
@@ -161,6 +162,9 @@ class Model:
             self.eval_data_lines = common.load_file_lines(self.config.TEST_PATH)
             print('Done loading test data')
 
+        if guard_input:
+            print("Guard input is active. (make sure dataset includes variables-list)")
+
         with open('log.txt', 'w') as output_file:
             num_correct_predictions = np.zeros(self.topk)
             total_predictions = 0
@@ -169,6 +173,10 @@ class Model:
             start_time = time.time()
 
             for batch in common.split_to_batches(self.eval_data_lines, self.config.TEST_BATCH_SIZE):
+                if guard_input:
+                    # TODO: debug this
+                    batch = [guard_by_rename(c) for c in batch]
+
                 top_words, top_scores, original_names = self.sess.run(
                     [self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op],
                     feed_dict={self.eval_placeholder: batch})
@@ -313,7 +321,7 @@ class Model:
         return x
 
     def evaluate_and_adverse(self, depth, topk, targeted_attack, adversarial_target_word,
-                             deadcode_attack, adverse_TP_only = True):
+                             deadcode_attack, guard_input = False, adverse_TP_only = True):
 
         eval_start_time = time.time()
         if self.eval_queue is None:
@@ -395,6 +403,8 @@ class Model:
             del self.eval_data_lines
             self.eval_data_lines = None
 
+            if guard_input:
+                print("Guard input is active. (make sure dataset includes variables-list)")
             print("Total adversariable data:", len(all_searchers))
             print("Proccesing in batches of:", self.config.TEST_BATCH_SIZE,
                   "adversarial mini-batches:", ADVERSARIAL_MINI_BATCH_SIZE)
@@ -417,8 +427,13 @@ class Model:
                 # print("load batch:", time.time()-s)
                 # s = time.time()
                 # evaluate step
-                batch_nodes_data = [(se, n, c) for se in batch_searchers
-                                    for n,c in se[1].pop_unchecked_adversarial_code()]
+
+                if guard_input:
+                    batch_nodes_data = [(se, n, guard_by_rename(c)) for se in batch_searchers
+                                        for n, c in se[1].pop_unchecked_adversarial_code(return_with_vars=True)]
+                else:
+                    batch_nodes_data = [(se, n, c) for se in batch_searchers
+                                        for n, c in se[1].pop_unchecked_adversarial_code()]
                 batch_data = [c for _, _, c in batch_nodes_data]
                 # batch_data = [se[1].get_adversarial_code() for se in batch_searchers]
                 top_words, top_scores, original_names = self.sess.run(
@@ -782,7 +797,7 @@ class Model:
 
         return loss, batched_grad_of_source_input, original_words, original_words_index
 
-    def predict(self, predict_data_lines):
+    def predict(self, predict_data_lines, guard_input=False):
         if self.predict_queue is None:
             self.predict_queue = PathContextReader.PathContextReader(word_to_index=self.word_to_index,
                                                                      path_to_index=self.path_to_index,
@@ -797,8 +812,15 @@ class Model:
             self.saver = tf.train.Saver()
             self.load_model(self.sess)
 
+        if guard_input:
+            print("Guard input is active. (make sure dataset includes variables-list)")
+
         results = []
         for batch in common.split_to_batches(predict_data_lines, 1):
+            if guard_input:
+                # TODO: debug this
+                batch = [guard_by_rename(c) for c in batch]
+
             top_words, top_scores, original_names, attention_weights, source_strings, path_strings, target_strings = self.sess.run(
                 [self.predict_top_words_op, self.predict_top_values_op, self.predict_original_names_op,
                  self.attention_weights_op, self.predict_source_string, self.predict_path_string,

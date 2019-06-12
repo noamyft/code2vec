@@ -29,6 +29,11 @@ if __name__ == '__main__':
     parser.add_argument("-tadvdead", "--adversarial_deadcode", dest="adversarial_deadcode", action='store_true', default=False,
                         help="set this flag to use dead-code attack (dataset preprocessed with deadcode required)", required=False)
 
+    parser.add_argument("-grd", "--guard_input", dest="guard_input", action='store_true',
+                        default=False,
+                        help="set this flag to use input guard",
+                        required=False)
+
     is_training = '--train' in sys.argv or '-tr' in sys.argv
     parser.add_argument("-s", "--save", dest="save_path",
                         help="path to save file", metavar="FILE", required=False)
@@ -62,7 +67,7 @@ if __name__ == '__main__':
         print('Target word vectors saved in word2vec text format in: %s' % args.save_t2v)
     if config.TEST_PATH and not args.data_path:
         if not args.test_folder and not args.test_adversarial:
-            eval_results = model.evaluate()
+            eval_results = model.evaluate(guard_input=args.guard_input)
             if eval_results is not None:
                 results, precision, recall, f1 = eval_results
                 print(results)
@@ -77,13 +82,13 @@ if __name__ == '__main__':
                                                       int(args.adversarial_topk),
                                                       targeted_attack=args.adversarial_type=="targeted",
                                                       adversarial_target_word=args.adversarial_target,
-                                                      deadcode_attack=args.adversarial_deadcode)
+                                                      deadcode_attack=args.adversarial_deadcode,
+                                                      guard_input=args.guard_input)
             with open("total_adversarial_results_" + config.TEST_PATH.replace("/", "").replace("\\", "") + ".pickle",
                       'wb') as handle:
                 pickle.dump(eval_results, handle)
 
     if args.predict:
-
         # manual adversarial search
         # predictor = InteractivePredictor(config, model)
         # automatic search for something
