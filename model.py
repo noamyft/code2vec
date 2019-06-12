@@ -313,13 +313,6 @@ class Model:
         self.eval_data_lines = None
         return results
 
-
-    def my_py_func(self,x):
-        # x = tf.matmul(x, x)  # You can use tf ops
-        print(x.shape[0])  # but it's eager!
-
-        return x
-
     def evaluate_and_adverse(self, depth, topk, targeted_attack, adversarial_target_word,
                              deadcode_attack, guard_input = False, adverse_TP_only = True):
 
@@ -364,7 +357,6 @@ class Model:
             total_fools = 0
             total_failed = 0
             results = []
-            lines_count = len(self.eval_data_lines)
 
             # for deadcode
             if deadcode_attack:
@@ -397,7 +389,6 @@ class Model:
                 all_searchers = [AdversarialTargetedSearcher(topk, depth, self, line, get_name(), variable_picker)
                                  for line in self.eval_data_lines]
 
-
             all_searchers = [[None, se] for se in all_searchers if se.can_be_adversarial()]
 
             del self.eval_data_lines
@@ -416,17 +407,12 @@ class Model:
             # print("\ttrue_name\ttrue_prediction\tadversarial_prediction\tstate")
             output_file.write("\ttrue_name\ttrue_prediction\tadversarial_prediction\tstate\n")
             while all_searchers or batch_searchers :
-                # s = time.time()
-                # load new lines
                 if len(batch_searchers) < self.config.TEST_BATCH_SIZE:
                     free_slots = self.config.TEST_BATCH_SIZE - len(batch_searchers)
                     processed += len(all_searchers[:free_slots])
                     new_batch = all_searchers[:free_slots]
                     del all_searchers[:free_slots]
                     batch_searchers += new_batch
-                # print("load batch:", time.time()-s)
-                # s = time.time()
-                # evaluate step
 
                 if guard_input:
                     batch_nodes_data = [(se, n, guard_by_rename(c)) for se in batch_searchers
@@ -435,16 +421,12 @@ class Model:
                     batch_nodes_data = [(se, n, c) for se in batch_searchers
                                         for n, c in se[1].pop_unchecked_adversarial_code()]
                 batch_data = [c for _, _, c in batch_nodes_data]
-                # batch_data = [se[1].get_adversarial_code() for se in batch_searchers]
+
                 top_words, top_scores, original_names = self.sess.run(
-                    # [self.eval_top_words_op],
                     [self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op],
                     feed_dict={self.eval_placeholder: batch_data})
                 top_words = common.binary_to_string_matrix(top_words)
-                    # , common.binary_to_string_matrix(
-                    # original_names)
 
-                # new_batch_data = []
                 new_batch_searchers = []
                 searcher_done = {}
                 for (searcher, node, _), one_top_words in zip(batch_nodes_data, top_words):
@@ -479,28 +461,19 @@ class Model:
                               "\t" + searcher[0] +\
                               "\t" + one_top_words[0] + \
                               "\t" + str(node)
-                        # print(out)
+
                         output_file.write(out + "\n")
-                        # results.append({"true_name": searcher[1].get_original_name(),
-                        #                 "true_prediction": searcher[0],
-                        #                 "adversarial_prediction": one_top_words,
-                        #                 "change":searcher[1].get_current_node()})
                         continue
 
                     if searcher not in new_batch_searchers:
                         new_batch_searchers.append(searcher)
-                    # new_batch_data.append(one_data)
 
-                # batch_data = new_batch_data
                 batch_searchers = [s for s in new_batch_searchers if s[1] not in searcher_done]
                 batch_data = [se[1].get_adversarial_code() for se in batch_searchers]
                 # if all methods fails - continue without grad calculation
                 if not batch_searchers:
                     continue
 
-                # print("eval:", time.time() - s)
-                # s = time.time()
-                # adverse step
                 new_batch_searchers = []
 
                 while batch_data:
@@ -509,18 +482,13 @@ class Model:
                     del batch_searchers[:ADVERSARIAL_MINI_BATCH_SIZE]
                     del batch_data[:ADVERSARIAL_MINI_BATCH_SIZE]
 
-                    # loss_of_input, grad_of_input, adversarial_name, adversarial_index, source_strings, target_strings\
                     loss_of_input, grad_of_input, source_target_strings  = self.sess.run(
                         [self.loss_wrt_input,
                          self.grad_wrt_input,
-                         # self.adversarial_name, self.adversarial_name_index,
                          source_target_tensor],
                         feed_dict={self.eval_placeholder: mini_batch_data})
 
                     source_target_strings = np.array(common.binary_to_string_matrix(source_target_strings))
-
-                    # print("adverse-tf:", time.time() - s)
-                    # s = time.time()
 
                     for searcher, strings, grads in zip(mini_batch_searchers, source_target_strings, grad_of_input):
                         if not searcher[1].next((0, strings, grads)):
@@ -529,18 +497,10 @@ class Model:
                                   "\t" + searcher[0] + \
                                   "\t" + "--FAIL--" + \
                                   "\t" + str(searcher[1].get_current_node())
-                            # print(out)
                             output_file.write(out + "\n")
-                            # results.append({"true_name": searcher[1].get_original_name(),
-                            #                 "true_prediction": searcher[0],
-                            #                 "adversarial_prediction": None,
-                            #                 "change": searcher[1].get_current_node()})
                             continue
 
                         new_batch_searchers.append(searcher)
-
-                    # print("adverse-next:", time.time() - s)
-                    # s = time.time()
 
                 batch_searchers = new_batch_searchers
 
@@ -564,8 +524,6 @@ class Model:
 
         elapsed = int(time.time() - eval_start_time)
         print("Evaluation time: %sH:%sM:%sS" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
-        # del self.eval_data_lines
-        # self.eval_data_lines = None
         return results
 
     def update_per_subtoken_statistics(self, results, true_positive, false_positive, false_negative):
