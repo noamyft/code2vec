@@ -21,6 +21,11 @@ class Config:
         config.PATHS_VOCAB_SIZE = 911417
         config.EMBEDDINGS_SIZE = 128
         config.MAX_TO_KEEP = 10
+
+        # Hyper-parameters for adversarial search
+        config.MAX_WORDS_FROM_VOCAB = 10000
+        config.ADVERSARIAL_MINI_BATCH_SIZE = 256
+
         # Automatically filled, do not edit:
         config.TRAIN_PATH = args.data_path
         config.TEST_PATH = args.test_path
@@ -48,6 +53,10 @@ class Config:
         self.LOAD_PATH = ''
         self.MAX_TO_KEEP = 0
         self.RELEASE = False
+
+        # Hyper-parameters for adversarial search
+        self.MAX_WORDS_FROM_VOCAB = 0
+        self.ADVERSARIAL_MINI_BATCH_SIZE = 0
 
 
 class common:

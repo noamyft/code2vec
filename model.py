@@ -11,12 +11,6 @@ import adversarialsearcher
 from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher
 from codeguard import guard_by_rename
 
-tfe = tf.contrib.eager
-
-# Hyper-parameters
-MAX_WORDS_FROM_VOCAB = 10000
-ADVERSARIAL_MINI_BATCH_SIZE = 20
-
 class Model:
     topk = 10
     num_batches_to_log = 100
@@ -398,7 +392,7 @@ class Model:
                 print("Guard input is active. (make sure dataset includes variables-list)")
             print("Total adversariable data:", len(all_searchers))
             print("Proccesing in batches of:", self.config.TEST_BATCH_SIZE,
-                  "adversarial mini-batches:", ADVERSARIAL_MINI_BATCH_SIZE)
+                  "adversarial mini-batches:", self.config.ADVERSARIAL_MINI_BATCH_SIZE)
             i=0
             processed = 0
             excluded = 0
@@ -477,10 +471,10 @@ class Model:
                 new_batch_searchers = []
 
                 while batch_data:
-                    mini_batch_searchers = batch_searchers[:ADVERSARIAL_MINI_BATCH_SIZE]
-                    mini_batch_data = batch_data[:ADVERSARIAL_MINI_BATCH_SIZE]
-                    del batch_searchers[:ADVERSARIAL_MINI_BATCH_SIZE]
-                    del batch_data[:ADVERSARIAL_MINI_BATCH_SIZE]
+                    mini_batch_searchers = batch_searchers[:self.config.ADVERSARIAL_MINI_BATCH_SIZE]
+                    mini_batch_data = batch_data[:self.config.ADVERSARIAL_MINI_BATCH_SIZE]
+                    del batch_searchers[:self.config.ADVERSARIAL_MINI_BATCH_SIZE]
+                    del batch_data[:self.config.ADVERSARIAL_MINI_BATCH_SIZE]
 
                     loss_of_input, grad_of_input, source_target_strings  = self.sess.run(
                         [self.loss_wrt_input,
@@ -743,7 +737,7 @@ class Model:
 
             grad_word_embed = tf.reshape(grad_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
             # grad_target_word_embed = tf.reshape(grad_target_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
-            partial_words_vocab = words_vocab[:MAX_WORDS_FROM_VOCAB]
+            partial_words_vocab = words_vocab[:self.config.MAX_WORDS_FROM_VOCAB]
             grad_of_input = tf.matmul(grad_word_embed, partial_words_vocab, transpose_b=True)
             # grad_of_target_input = tf.matmul(grad_target_word_embed, words_vocab, transpose_b=True)
 
