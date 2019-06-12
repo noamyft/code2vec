@@ -1,12 +1,15 @@
 import numpy as np
 
-def overrideVariables(newVarList, code):
-    var_code_split_index = code.find(" ")
-    return ",".join(newVarList) + code[var_code_split_index:]
+# def overrideVariables(newVarList, code):
+#     var_code_split_index = code.find(" ")
+#     return ",".join(newVarList) + code[var_code_split_index:]
+
+def init_deadcode_variable(code, variables):
+    return [("zpkjxq","zpkjxq")]
 
 class AdversarialSearcher():
 
-    def __init__(self, topk, max_depth, model, code):
+    def __init__(self, topk, max_depth, model, code, initial_state_generator=None):
         self.topk = topk
         self.max_depth = max_depth
         self.model = model
@@ -38,7 +41,11 @@ class AdversarialSearcher():
             self.open_state_to_node = {}
             self.close_state_to_node = {}
             self.unchecked_nodes = []
-            init_states = [(s, 0) for s in self._get_init_state(self.original_code, self.vars)]
+
+            if initial_state_generator == None:
+                initial_state_generator = self._get_init_state
+
+            init_states = [(s, 0) for s in initial_state_generator(self.original_code, self.vars)]
             self._update_open(init_states, 0)
 
             current_state, self.current_node = self._select_best_state()
@@ -49,16 +56,17 @@ class AdversarialSearcher():
     def can_be_adversarial(self):
         return self.vars != ""
 
-    def get_adversarial_code(self):
+    def get_adversarial_code(self, return_with_vars=False):
         assert self.current_node is not None
             # return None
-        return self._apply_state(self.original_code, self.current_node["state"])
+        return self._apply_state(self.original_code, self.current_node["state"], return_with_vars=return_with_vars)
 
-    def pop_unchecked_adversarial_code(self):
+    def pop_unchecked_adversarial_code(self, return_with_vars=False):
         if not self.unchecked_nodes:
             self.unchecked_nodes = [self.current_node]
 
-        res = [(node, self._apply_state(self.original_code, node["state"])) for node in self.unchecked_nodes]
+        res = [(node, self._apply_state(self.original_code, node["state"], return_with_vars=return_with_vars))
+               for node in self.unchecked_nodes]
         del self.unchecked_nodes
         self.unchecked_nodes = []
         return res
@@ -73,14 +81,17 @@ class AdversarialSearcher():
     #     return self.adversarial_code
 
     def _get_init_state(self, code, variables):
-        # TODO: use .lower when get vars - ans: Done in constructor
         return [(variables[0],variables[0])]
 
-    def _apply_state(self, code, state):
+    def _apply_state(self, code, state, return_with_vars=False):
         original_var, new_var = state
 
         new_code = code.replace(" " + original_var + ",", " " + new_var + ",")\
             .replace("," + original_var + " ", "," + new_var + " ")
+
+        if return_with_vars:
+            return_vars = [v for v in self.vars if v != original_var] + [new_var]
+            new_code = ",".join(return_vars) + " " + new_code
 
         return new_code
 
@@ -197,7 +208,7 @@ class AdversarialSearcher():
 
 class AdversarialTargetedSearcher(AdversarialSearcher):
 
-    def __init__(self, topk, max_depth, model, code, new_target):
+    def __init__(self, topk, max_depth, model, code, new_target, initial_state_generator=None):
         self.new_target = new_target
         # replace original name with targeted name
         start_original_name = code.find(" ") + 1
@@ -205,7 +216,7 @@ class AdversarialTargetedSearcher(AdversarialSearcher):
         true_target = code[start_original_name:end_original_name]
         code = code[:start_original_name] + self.new_target + code[end_original_name:]
 
-        super().__init__(topk, max_depth, model, code)
+        super().__init__(topk, max_depth, model, code, initial_state_generator=initial_state_generator)
         self.original_name = true_target
 
 

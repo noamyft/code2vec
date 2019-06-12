@@ -360,12 +360,14 @@ class Model:
 
             # for deadcode
             if deadcode_attack:
-                self.eval_data_lines = [adversarialsearcher.overrideVariables(["zpkjxq"], line) for line in self.eval_data_lines]
+                variable_picker = adversarialsearcher.init_deadcode_variable
+            else:
+                variable_picker = None
 
             # untargeted searcher
             if not targeted_attack:
                 print("Using non-targeted attack")
-                all_searchers = [AdversarialSearcher(topk, depth, self, line) for line in self.eval_data_lines]
+                all_searchers = [AdversarialSearcher(topk, depth, self, line, variable_picker) for line in self.eval_data_lines]
             else: # targeted searcher
                 if adversarial_target_word == "random-uniform":
                     print("Using targeted attack. target sampled uniform-ly")
@@ -384,7 +386,8 @@ class Model:
                         print(adversarial_target_word, "not existed in vocab!")
                         return []
                     get_name = lambda: adversarial_target_word
-                all_searchers = [AdversarialTargetedSearcher(topk, depth, self, line, get_name()) for line in self.eval_data_lines]
+                all_searchers = [AdversarialTargetedSearcher(topk, depth, self, line, get_name(), variable_picker)
+                                 for line in self.eval_data_lines]
 
 
             all_searchers = [[None, se] for se in all_searchers if se.can_be_adversarial()]
