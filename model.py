@@ -455,7 +455,7 @@ class Model:
                     one_top_words = common.filter_impossible_names(one_top_words)
                     if not one_top_words:
                         output_file.write("code with state: " +
-                                          searcher[1].get_current_node() + " cause empty predictions\n")
+                                          str(node) + " cause empty predictions\n")
                         continue
 
                     # save original prediction
@@ -478,7 +478,7 @@ class Model:
                         out = "\t" + searcher[1].get_original_name() +\
                               "\t" + searcher[0] +\
                               "\t" + one_top_words[0] + \
-                              "\t" + str(searcher[1].get_current_node())
+                              "\t" + str(node)
                         # print(out)
                         output_file.write(out + "\n")
                         # results.append({"true_name": searcher[1].get_original_name(),
