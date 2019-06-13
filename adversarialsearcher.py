@@ -1,4 +1,5 @@
 import numpy as np
+import random
 
 # def overrideVariables(newVarList, code):
 #     var_code_split_index = code.find(" ")
@@ -278,3 +279,61 @@ class AdversarialTargetedSearcher(AdversarialSearcher):
     #     # print("Tried (total:", len(close),") :: ", close)
     #     return None
 
+class AdversarialSearcherTrivial(AdversarialSearcher):
+    def __init__(self, topk, max_depth, model, code, initial_state_generator=None):
+        super().__init__(topk,max_depth, model,code,initial_state_generator)
+        self.random_candidates = []
+        self.num_of_trials = int(topk**(max_depth + 1) / (topk - 1) - 2)
+
+    def _create_states(self, state, model_results, topk):
+        original_var, new_var = state
+
+        all_name = np.array(list(self.model.index_to_word.keys()))
+        # filter forbidden words
+        replace_with = all_name[~np.isin(all_name, self.forbidden_varnames)]
+
+        self.random_candidates = random.sample(replace_with.tolist(), self.num_of_trials)
+
+        result = [((original_var, self.model.index_to_word[i]), 0) for i in self.random_candidates]
+
+        return result
+
+    def next(self, model_grads):
+        if self.random_candidates:
+            return False
+
+        # create new states
+        new_states = self._create_states(self.current_node["state"], model_grads, self.topk)
+
+        self._update_open(new_states, self.current_node["level"] + 1)
+        # clear open (because we already generate enough possibilities)
+        self.open_state_to_node.clear()
+
+        return True
+
+class AdversarialTargetedSearcherTrivial(AdversarialTargetedSearcher):
+    def __init__(self, topk, max_depth, model, code, new_target, initial_state_generator=None):
+        super().__init__(topk, max_depth, model, code, new_target, initial_state_generator)
+        self.random_candidates = []
+
+    def _create_states(self, state, model_results, topk):
+        original_var, new_var = state
+
+        self.random_candidates = [self.new_target.replace("|","")]
+
+        result = [((original_var, self.new_target.replace("|","")), 0)]
+
+        return result
+
+    def next(self, model_grads):
+        if self.random_candidates:
+            return False
+
+        # create new states
+        new_states = self._create_states(self.current_node["state"], model_grads, self.topk)
+
+        self._update_open(new_states, self.current_node["level"] + 1)
+        # clear open (because we already generate enough possibilities)
+        self.open_state_to_node.clear()
+
+        return True

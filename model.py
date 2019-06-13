@@ -8,7 +8,8 @@ import os
 import random
 from common import common, VocabType
 import adversarialsearcher
-from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher
+from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher, \
+    AdversarialSearcherTrivial, AdversarialTargetedSearcherTrivial
 from codeguard import guard_by_rename
 
 class Model:
