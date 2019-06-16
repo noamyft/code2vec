@@ -1,4 +1,5 @@
 import tensorflow as tf
+from concurrent.futures import ThreadPoolExecutor
 
 import PathContextReader
 import numpy as np
@@ -170,7 +171,7 @@ class Model:
             for batch in common.split_to_batches(self.eval_data_lines, self.config.TEST_BATCH_SIZE):
                 if guard_input:
                     # TODO: debug this
-                    batch = [guard_by_rename(c) for c in batch]
+                    batch = self.guard_code_batch(batch)
 
                 top_words, top_scores, original_names = self.sess.run(
                     [self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op],
@@ -202,6 +203,12 @@ class Model:
         del self.eval_data_lines
         self.eval_data_lines = None
         return num_correct_predictions / total_predictions, precision, recall, f1
+
+    def guard_code_batch(self, batch):
+        with ThreadPoolExecutor(max_workers=13) as executor:
+            result = list(executor.map(lambda r: guard_by_rename(r), batch))
+
+        return result
 
     def evaluate_folder(self):
         eval_start_time = time.time()
@@ -410,8 +417,10 @@ class Model:
                     batch_searchers += new_batch
 
                 if guard_input:
-                    batch_nodes_data = [(se, n, guard_by_rename(c)) for se in batch_searchers
+                    batch_nodes_data = [(se, n, c) for se in batch_searchers
                                         for n, c in se[1].pop_unchecked_adversarial_code(return_with_vars=True)]
+                    with ThreadPoolExecutor(max_workers=13) as executor:
+                        batch_nodes_data = list(executor.map(lambda r: (r[0], r[1], guard_by_rename(r[2])), batch_nodes_data))
                 else:
                     batch_nodes_data = [(se, n, c) for se in batch_searchers
                                         for n, c in se[1].pop_unchecked_adversarial_code()]
@@ -772,7 +781,7 @@ class Model:
         for batch in common.split_to_batches(predict_data_lines, 1):
             if guard_input:
                 # TODO: debug this
-                batch = [guard_by_rename(c) for c in batch]
+                batch = self.guard_code_batch(batch)
 
             top_words, top_scores, original_names, attention_weights, source_strings, path_strings, target_strings = self.sess.run(
                 [self.predict_top_words_op, self.predict_top_values_op, self.predict_original_names_op,
