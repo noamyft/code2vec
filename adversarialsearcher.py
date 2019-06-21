@@ -163,50 +163,6 @@ class AdversarialSearcher():
     def _select_best_state(self):
         return max(self.open_state_to_node.items(), key=lambda n: n[1]["score"])
 
-
-#######################################################################################
-    # def rename_var(self, state, src, dst):
-    #     return (src, dst)
-    # def find_adversarial(self):
-    #     # input_filename = 'Input.java'
-    #     # MAX_ATTEMPTS = 50
-    #     # MAX_NODES_TO_OPEN = 10
-    #
-    #     open = [self.create_bfs_node(self._get_init_state(self.code), 0, 0)]
-    #     close =[]
-    #
-    #     # print('Starting interactive prediction with mono adversarial search...')
-    #     while open:
-    #         # open.sort(key=lambda n : -n["score"])
-    #         current_node_index, current_node  = self._select_best_state(open)
-    #         del open[current_node_index]
-    #         close.append(current_node)
-    #
-    #         new_code = self._apply_state(self.code, current_node["state"])
-    #
-    #         # feed forward to evaluate
-    #         results = self.model.predict(new_code)
-    #
-    #         if self.is_target_found(results):
-    #             # print("MATCH FOUND!", current_node)
-    #             # print("Tried (total:", len(close), ") :: ", close)
-    #             return current_node
-    #
-    #         # feed backward to find adversarial
-    #         model_results = self.model.calc_loss_and_gradients_wrt_input(new_code)
-    #
-    #         # find best renaming
-    #         if current_node["level"] < self.max_depth:
-    #             new_states = self._create_states(current_node["state"], model_results, self.topk)
-    #             new_nodes = [self.create_bfs_node(state, current_node["level"] + 1, score)
-    #                          for state, score in new_states if not self._state_exist(open, close, state)]
-    #             open = open + new_nodes
-    #
-    #
-    #     # print("FAILED!")
-    #     # print("Tried (total:", len(close),") :: ", close)
-    #     return None
-
 class AdversarialTargetedSearcher(AdversarialSearcher):
 
     def __init__(self, topk, max_depth, model, code, new_target, initial_state_generator=None):

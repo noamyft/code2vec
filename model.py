@@ -816,24 +816,25 @@ class Model:
             self.loss_wrt_input, self.grad_wrt_input, self.adversarial_name, self.adversarial_name_index = \
                 self.build_test_graph_with_loss(self.predict_queue.get_filtered_batches(), self.predict_queue)
 
-        results = []
-        for batch in common.split_to_batches(predict_data_lines, 1):
-            loss_of_input, grad_of_input, adversarial_name, adversarial_index, source_strings, \
-            path_strings, target_strings = self.sess.run(
-                [self.loss_wrt_input, self.grad_wrt_input, self.adversarial_name, self.adversarial_name_index,
-                 self.predict_source_string, self.predict_path_string,
-                 self.predict_path_target_string],
-                feed_dict={self.predict_placeholder: batch})
+        source_target_tensor = tf.cond(
+            tf.not_equal(tf.rank(self.predict_source_string), 1),
+            lambda: tf.concat([self.predict_source_string, self.predict_path_target_string], axis=1),
+            lambda: tf.concat(
+                [tf.expand_dims(self.predict_source_string, axis=0),
+                 tf.expand_dims(self.predict_path_target_string, axis=0)],
+                axis=1))
 
+        # for batch in common.split_to_batches(predict_data_lines, 1):
+        batch = predict_data_lines
+        loss_of_input, grad_of_input, source_target_strings = self.sess.run(
+            [self.loss_wrt_input,
+             self.grad_wrt_input,
+             source_target_tensor],
+            feed_dict={self.predict_placeholder: batch})
 
-            adversarial_name = common.binary_to_string_matrix(adversarial_name)
-            source_strings, target_strings = common.binary_to_string_list(source_strings), \
-                                             common.binary_to_string_list(target_strings)
+        source_target_strings = np.array(common.binary_to_string_matrix(source_target_strings))
 
-        all_strings = np.concatenate([source_strings, target_strings], axis=0)
-        all_grads = np.concatenate([grad_of_input[0], grad_of_input[1]], axis=0)
-
-        return loss_of_input, all_strings, all_grads
+        return loss_of_input, grad_of_input, source_target_strings
 
     def get_words_vocab_embed(self):
         result_words_vocab_embed = self.sess.run(self.words_vocab_embed)

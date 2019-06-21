@@ -3,7 +3,8 @@ import pickle
 from common import Config, VocabType
 from argparse import ArgumentParser
 from interactive_predict import InteractivePredictor
-from interactive_predict_adversarial_search import InteractivePredictorAdvMonoSearch, InteractivePredictorAdvSimilarSearch
+from interactive_predict_adversarial_search import InteractivePredictorAdvMonoSearch, \
+    InteractivePredictorAdvSimilarSearch, InteractivePredictorAdversarialBFS
 from model import Model
 import sys
 
@@ -89,10 +90,16 @@ if __name__ == '__main__':
                 pickle.dump(eval_results, handle)
 
     if args.predict:
-        # manual adversarial search
-        # predictor = InteractivePredictor(config, model)
+        if not args.test_adversarial:
+            # manual adversarial search
+            predictor = InteractivePredictor(config, model)
+        else:
+            predictor = InteractivePredictorAdversarialBFS(config, model,
+                                                           int(args.adversarial_topk),
+                                                           int(args.adversarial_depth),
+                                                           args.guard_input, True)
         # automatic search for something
-        predictor = InteractivePredictorAdvMonoSearch(config, model)
+        # predictor = InteractivePredictorAdvMonoSearch(config, model)
         # automatic search similar name
         # predictor = InteractivePredictorAdvSimilarSearch(config, model)
         predictor.predict()
