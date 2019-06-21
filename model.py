@@ -11,7 +11,8 @@ from common import common, VocabType
 import adversarialsearcher
 from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher, \
     AdversarialSearcherTrivial, AdversarialTargetedSearcherTrivial
-from codeguard import guard_by_rename
+from codeguard import guard_by_n2p, guard_by_vunk
+
 
 class Model:
     topk = 10
@@ -206,7 +207,9 @@ class Model:
 
     def guard_code_batch(self, batch):
         with ThreadPoolExecutor(max_workers=13) as executor:
-            result = list(executor.map(lambda r: guard_by_rename(r), batch))
+            result = list(executor.map(lambda r: guard_by_n2p(r), batch))
+
+        # result = [guard_by_vunk(r) for r in batch]
 
         return result
 
@@ -420,7 +423,7 @@ class Model:
                     batch_nodes_data = [(se, n, c) for se in batch_searchers
                                         for n, c in se[1].pop_unchecked_adversarial_code(return_with_vars=True)]
                     with ThreadPoolExecutor(max_workers=13) as executor:
-                        batch_nodes_data = list(executor.map(lambda r: (r[0], r[1], guard_by_rename(r[2])), batch_nodes_data))
+                        batch_nodes_data = list(executor.map(lambda r: (r[0], r[1], guard_by_n2p(r[2])), batch_nodes_data))
                 else:
                     batch_nodes_data = [(se, n, c) for se in batch_searchers
                                         for n, c in se[1].pop_unchecked_adversarial_code()]

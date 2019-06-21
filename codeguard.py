@@ -1,7 +1,9 @@
 import json
 import requests
 
-def guard_by_rename(code_sample_with_vars):
+ONLY_VARIABLE = "VUNK"
+
+def guard_by_n2p(code_sample_with_vars):
     var_code_split_index = code_sample_with_vars.find(" ")
     code = code_sample_with_vars[var_code_split_index + 1:]
     variables = code_sample_with_vars[:var_code_split_index]
@@ -36,5 +38,17 @@ def guard_by_rename(code_sample_with_vars):
     for original_var, new_var in replace_variables.items():
         code = code.replace(" " + original_var + ",", " " + new_var + ",") \
             .replace("," + original_var + " ", "," + new_var + " ")
+
+    return code
+
+def guard_by_vunk(code_sample_with_vars):
+    var_code_split_index = code_sample_with_vars.find(" ")
+    code = code_sample_with_vars[var_code_split_index + 1:]
+    variables = code_sample_with_vars[:var_code_split_index]
+    if variables != "":
+        variables = variables.lower().split(",")
+        for original_var in variables:
+            code = code.replace(" " + original_var + ",", " " + ONLY_VARIABLE + ",") \
+                .replace("," + original_var + " ", "," + ONLY_VARIABLE + " ")
 
     return code
