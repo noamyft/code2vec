@@ -12,6 +12,7 @@ import adversarialsearcher
 from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher, \
     AdversarialSearcherTrivial, AdversarialTargetedSearcherTrivial
 from codeguard import guard_by_n2p, guard_by_vunk
+import common_adversarial
 
 
 class Model:
@@ -169,7 +170,10 @@ class Model:
             true_positive, false_positive, false_negative = 0, 0, 0
             start_time = time.time()
 
+            measure_by_percentage = {}
+
             for batch in common.split_to_batches(self.eval_data_lines, self.config.TEST_BATCH_SIZE):
+                original_batch = batch
                 if guard_input:
                     # TODO: debug this
                     batch = self.guard_code_batch(batch)
@@ -188,6 +192,22 @@ class Model:
                     zip(original_names, top_words),
                     true_positive, false_positive, false_negative)
 
+                for l, original, predicted in zip(original_batch, original_names, top_words):
+                    v, c = common_adversarial.separate_vars_code(l)
+                    v = common_adversarial.get_all_vars(v)
+                    t = common_adversarial.get_all_tokens(c)
+                    t.update(v)
+                    ratio = round(100*len(v)/len(t), 2)
+                    if ratio not in measure_by_percentage:
+                        measure_by_percentage[ratio] = {"TP":0, "FP":0, "FN":0}
+                    measure_by_percentage[ratio]["TP"], \
+                    measure_by_percentage[ratio]["FP"], \
+                    measure_by_percentage[ratio]["FN"] = self.update_per_subtoken_statistics(
+                        [(original, predicted)],
+                        measure_by_percentage[ratio]["TP"],
+                        measure_by_percentage[ratio]["FP"],
+                        measure_by_percentage[ratio]["FN"])
+
                 total_predictions += len(original_names)
                 total_prediction_batches += 1
                 if total_prediction_batches % self.num_batches_to_log == 0:
@@ -203,6 +223,10 @@ class Model:
         print("Evaluation time: %sH:%sM:%sS" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
         del self.eval_data_lines
         self.eval_data_lines = None
+
+        with open("per.pkl", "wb") as f:
+            pickle.dump(measure_by_percentage, f)
+
         return num_correct_predictions / total_predictions, precision, recall, f1
 
     def guard_code_batch(self, batch):
