@@ -199,7 +199,7 @@ class Model:
                     t.update(v)
                     ratio = round(100*len(v)/len(t), 2)
                     if ratio not in measure_by_percentage:
-                        measure_by_percentage[ratio] = {"TP":0, "FP":0, "FN":0}
+                        measure_by_percentage[ratio] = {"TP":0, "FP":0, "FN":0, "CNT": 0}
                     measure_by_percentage[ratio]["TP"], \
                     measure_by_percentage[ratio]["FP"], \
                     measure_by_percentage[ratio]["FN"] = self.update_per_subtoken_statistics(
@@ -207,6 +207,7 @@ class Model:
                         measure_by_percentage[ratio]["TP"],
                         measure_by_percentage[ratio]["FP"],
                         measure_by_percentage[ratio]["FN"])
+                    measure_by_percentage[ratio]["CNT"] += 1
 
                 total_predictions += len(original_names)
                 total_prediction_batches += 1
