@@ -231,10 +231,13 @@ class Model:
         return num_correct_predictions / total_predictions, precision, recall, f1
 
     def guard_code_batch(self, batch):
-        with ThreadPoolExecutor(max_workers=13) as executor:
-            result = list(executor.map(lambda r: guard_by_n2p(r), batch))
+        # with ThreadPoolExecutor(max_workers=13) as executor:
+        #     result = list(executor.map(lambda r: guard_by_n2p(r), batch))
 
+        # vunk
         # result = [guard_by_vunk(r) for r in batch]
+        # do nothing
+        result = [common_adversarial.separate_vars_code(r)[1] for r in batch]
 
         return result
 
