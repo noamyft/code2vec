@@ -231,14 +231,17 @@ class Model:
         return num_correct_predictions / total_predictions, precision, recall, f1
 
     def guard_code_batch(self, batch):
-        # with ThreadPoolExecutor(max_workers=13) as executor:
-        #     result = list(executor.map(lambda r: guard_by_n2p(r), batch))
+        with ThreadPoolExecutor(max_workers=13) as executor:
+            result = list(executor.map(lambda r: guard_by_n2p(r, lambda w: w in self.word_to_index),
+                                       batch))
 
         # vunk
         # result = [guard_by_vunk(r) for r in batch]
         # do nothing
-        result = [common_adversarial.separate_vars_code(r)[1] for r in batch]
-
+        # result = [common_adversarial.separate_vars_code(r)[1] for r in batch]
+        # cluster
+        # result = [guard_by_pca(r, lambda w: w in self.word_to_index,
+        #                        lambda w: self.get_words_vocab_embed(w)) for r in batch]
         return result
 
     def evaluate_folder(self):
@@ -450,8 +453,11 @@ class Model:
                 if guard_input:
                     batch_nodes_data = [(se, n, c) for se in batch_searchers
                                         for n, c in se[1].pop_unchecked_adversarial_code(return_with_vars=True)]
-                    with ThreadPoolExecutor(max_workers=13) as executor:
-                        batch_nodes_data = list(executor.map(lambda r: (r[0], r[1], guard_by_n2p(r[2])), batch_nodes_data))
+                    print("ERROR! no guard!")
+                    # with ThreadPoolExecutor(max_workers=13) as executor:
+                    #     batch_nodes_data = list(executor.map(lambda r: (r[0], r[1], guard_by_n2p(r[2])), batch_nodes_data))
+                    # batch_nodes_data = [(se, n, guard_by_pca(c, lambda w: w in self.word_to_index,
+                    #                        lambda w: self.get_words_vocab_embed(w))) for se, n, c in batch_nodes_data]
                 else:
                     batch_nodes_data = [(se, n, c) for se in batch_searchers
                                         for n, c in se[1].pop_unchecked_adversarial_code()]
@@ -867,8 +873,13 @@ class Model:
 
         return loss_of_input, grad_of_input, source_target_strings
 
-    def get_words_vocab_embed(self):
-        result_words_vocab_embed = self.sess.run(self.words_vocab_embed)
+    def get_words_vocab_embed(self, word):
+        if word is None:
+            result_words_vocab_embed = self.sess.run(self.words_vocab_embed)
+        else:
+            if word not in self.word_to_index:
+                return None
+            result_words_vocab_embed = self.sess.run(self.words_vocab_embed[self.word_to_index[word]])
         return result_words_vocab_embed
 
     def get_attention_per_path(self, source_strings, path_strings, target_strings, attention_weights):
