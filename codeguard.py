@@ -1,6 +1,7 @@
 import json
 import requests
 import common_adversarial
+import numpy as np
 
 ONLY_VARIABLE = "VUNK"
 
@@ -57,3 +58,32 @@ def guard_by_vunk(code_sample_with_vars):
                 .replace("," + original_var + " ", "," + ONLY_VARIABLE + " ")
 
     return code
+
+def guard_by_distance(code_sample_with_vars, is_word_in_vocab_func, get_embed_func):
+    variables, code = common_adversarial.separate_vars_code(code_sample_with_vars)
+    variables = common_adversarial.get_all_vars(variables)
+    tokens = common_adversarial.get_all_tokens(code)
+
+    if not variables:
+        return code
+
+    existed_variables = [v for v in variables if is_word_in_vocab_func(v)]
+
+    if not existed_variables:
+        return code
+
+    if len(existed_variables) == 1:
+        return common_adversarial.replace_var_in_code(code, existed_variables[0], ONLY_VARIABLE)
+
+    both = list(set(existed_variables + list(tokens)))
+
+    exist_tokens = [v for v in both if is_word_in_vocab_func(v)]
+    embed = {v:get_embed_func(v) for v in exist_tokens}
+
+    embed_sum = np.sum(list(embed.values()), axis=0)
+    # embed = {v: e - (embed_sum / len(embed)) for v, e in embed.items()}
+
+    dist = {v : np.linalg.norm(embed[v] - ((embed_sum - embed[v]) / (len(embed) - 1)),ord=2) for v in existed_variables}
+    bad_var = max(dist, key=lambda v: dist[v])
+    # print("method:", code.split(" ")[0], "picked:", bad_var, dist)
+    return common_adversarial.replace_var_in_code(code, bad_var, ONLY_VARIABLE)

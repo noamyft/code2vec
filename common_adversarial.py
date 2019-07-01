@@ -18,3 +18,7 @@ def get_all_vars(variables):
     if variables == '':
         return []
     return variables.lower().split(",")
+
+def replace_var_in_code(code, original_var, new_var):
+    return code.replace(" " + original_var + ",", " " + new_var + ",") \
+        .replace("," + original_var + " ", "," + new_var + " ")

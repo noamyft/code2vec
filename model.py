@@ -11,6 +11,7 @@ from common import common, VocabType
 import adversarialsearcher
 from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher, \
     AdversarialSearcherTrivial, AdversarialTargetedSearcherTrivial
+import codeguard
 from codeguard import guard_by_n2p, guard_by_vunk
 import common_adversarial
 
@@ -231,9 +232,9 @@ class Model:
         return num_correct_predictions / total_predictions, precision, recall, f1
 
     def guard_code_batch(self, batch):
-        with ThreadPoolExecutor(max_workers=13) as executor:
-            result = list(executor.map(lambda r: guard_by_n2p(r, lambda w: w in self.word_to_index),
-                                       batch))
+        # with ThreadPoolExecutor(max_workers=13) as executor:
+        #     result = list(executor.map(lambda r: guard_by_n2p(r, lambda w: w in self.word_to_index),
+        #                                batch))
 
         # vunk
         # result = [guard_by_vunk(r) for r in batch]
@@ -242,6 +243,9 @@ class Model:
         # cluster
         # result = [guard_by_pca(r, lambda w: w in self.word_to_index,
         #                        lambda w: self.get_words_vocab_embed(w)) for r in batch]
+        # distance
+        result = [codeguard.guard_by_distance(r, lambda w: w in self.word_to_index,
+                               lambda w: self.get_words_vocab_embed(w)) for r in batch]
         return result
 
     def evaluate_folder(self):
@@ -453,7 +457,10 @@ class Model:
                 if guard_input:
                     batch_nodes_data = [(se, n, c) for se in batch_searchers
                                         for n, c in se[1].pop_unchecked_adversarial_code(return_with_vars=True)]
-                    print("ERROR! no guard!")
+
+                    batch_nodes_data = [(se, n, codeguard.guard_by_distance(c, lambda w: w in self.word_to_index,
+                                                                            lambda w: self.get_words_vocab_embed(w)))
+                                        for se, n, c in batch_nodes_data]
                     # with ThreadPoolExecutor(max_workers=13) as executor:
                     #     batch_nodes_data = list(executor.map(lambda r: (r[0], r[1], guard_by_n2p(r[2])), batch_nodes_data))
                     # batch_nodes_data = [(se, n, guard_by_pca(c, lambda w: w in self.word_to_index,
