@@ -198,7 +198,8 @@ class Model:
                     v = common_adversarial.get_all_vars(v)
                     t = common_adversarial.get_all_tokens(c)
                     t.update(v)
-                    ratio = round(100*len(v)/len(t), 2)
+                    # ratio = round(100*len(v)/len(t), 2)
+                    ratio = len(v)
                     if ratio not in measure_by_percentage:
                         measure_by_percentage[ratio] = {"TP":0, "FP":0, "FN":0, "CNT": 0}
                     measure_by_percentage[ratio]["TP"], \
