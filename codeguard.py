@@ -77,8 +77,11 @@ def guard_by_distance(code_sample_with_vars, is_word_in_vocab_func, get_embed_fu
 
     both = list(set(existed_variables + list(tokens)))
 
+    # exist_tokens = [v for v in both if is_word_in_vocab_func(v)]
+    # embed = {v:get_embed_func(v) for v in exist_tokens}
     exist_tokens = [v for v in both if is_word_in_vocab_func(v)]
-    embed = {v:get_embed_func(v) for v in exist_tokens}
+    embed = get_embed_func(exist_tokens)
+    embed = {v:e for v,e in zip(exist_tokens, embed)}
 
     embed_sum = np.sum(list(embed.values()), axis=0)
     # embed = {v: e - (embed_sum / len(embed)) for v, e in embed.items()}
@@ -87,3 +90,53 @@ def guard_by_distance(code_sample_with_vars, is_word_in_vocab_func, get_embed_fu
     bad_var = max(dist, key=lambda v: dist[v])
     # print("method:", code.split(" ")[0], "picked:", bad_var, dist)
     return common_adversarial.replace_var_in_code(code, bad_var, ONLY_VARIABLE)
+
+# from sklearn.decomposition import PCA
+# import matplotlib.pyplot as plt
+# def guard_by_pca(code_sample_with_vars, is_word_in_vocab_func, get_embed_func):
+#     variables, code = common_adversarial.separate_vars_code(code_sample_with_vars)
+#     variables = common_adversarial.get_all_vars(variables)
+#     tokens = common_adversarial.get_all_tokens(code)
+#
+#     both = list(set(variables+list(tokens)))
+#
+#     # both = variables
+#
+#     exist_tokens = [v for v in both if is_word_in_vocab_func(v)]
+#     if len(exist_tokens)==1:
+#         return code
+#     exist_embed = [get_embed_func(v) for v in exist_tokens]
+#
+#     pca = PCA(n_components=2)
+#     principalComponents = pca.fit_transform(exist_embed)
+#
+#     # x, y = zip(*principalComponents)
+#     # fig, ax = plt.subplots()
+#     for (x,y), name in zip(principalComponents, exist_tokens):
+#         al = 1 if name in variables else 0.5
+#         name = name + ("_V" if name in variables else "")
+#         plt.scatter(x, y, label=name, alpha=al, edgecolors='none')
+#
+#     plt.title(code.split(" ")[0])
+#     plt.legend()
+#
+#     plt.savefig("pca/" + datetime.now().strftime('%Y%m%d_%H_%M_%S')+".png")
+#     plt.clf()
+#
+#     # fig = plt.figure(figsize=(8, 8))
+#     # ax = fig.add_subplot(1, 1, 1)
+#     # ax.set_xlabel('Principal Component 1', fontsize=15)
+#     # ax.set_ylabel('Principal Component 2', fontsize=15)
+#     # ax.set_title('2 component PCA', fontsize=20)
+#     # targets = ['Iris-setosa', 'Iris-versicolor', 'Iris-virginica']
+#     # colors = ['r', 'g', 'b']
+#     # for target, color in zip(targets, colors):
+#     #     indicesToKeep = finalDf['target'] == target
+#     #     ax.scatter(finalDf.loc[indicesToKeep, 'principal component 1']
+#     #                , finalDf.loc[indicesToKeep, 'principal component 2']
+#     #                , c=color
+#     #                , s=50)
+#     # ax.legend(targets)
+#     # ax.grid()
+#
+#     return code

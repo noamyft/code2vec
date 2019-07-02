@@ -883,11 +883,18 @@ class Model:
     def get_words_vocab_embed(self, word):
         if word is None:
             result_words_vocab_embed = self.sess.run(self.words_vocab_embed)
+            return result_words_vocab_embed
         else:
-            if word not in self.word_to_index:
-                return None
-            result_words_vocab_embed = self.sess.run(self.words_vocab_embed[self.word_to_index[word]])
-        return result_words_vocab_embed
+            if type(word) == list:
+                embed_word = [self.words_vocab_embed[self.word_to_index[w]] for w in word]
+                result_words_vocab_embed = self.sess.run(embed_word)
+                return result_words_vocab_embed
+            else:
+                if word in self.word_to_index:
+                    result_words_vocab_embed = self.sess.run(self.words_vocab_embed[self.word_to_index[word]])
+                    return result_words_vocab_embed
+                else:
+                    return None
 
     def get_attention_per_path(self, source_strings, path_strings, target_strings, attention_weights):
         attention_weights = np.squeeze(attention_weights)  # (max_contexts, )
