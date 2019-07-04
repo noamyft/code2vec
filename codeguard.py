@@ -89,8 +89,9 @@ def guard_by_distance(code_sample_with_vars, is_word_in_vocab_func, get_embed_fu
 
     dist = {v : np.linalg.norm(embed[v] - ((embed_sum - embed[v]) / (len(embed) - 1)),ord=2) for v in existed_variables}
     bad_var = max(dist, key=lambda v: dist[v])
-    # print("method:", code.split(" ")[0], "picked:", bad_var, dist)
-    return common_adversarial.replace_var_in_code(code, bad_var, ONLY_VARIABLE)
+    good_var = min(dist, key=lambda v: dist[v])
+    # print("method:", code.split(" ")[0], "picked:", bad_var, "replace with:", good_var, dist, len(dist))
+    return common_adversarial.replace_var_in_code(code, bad_var, good_var)
 
 # from sklearn.decomposition import PCA
 # import matplotlib.pyplot as plt
