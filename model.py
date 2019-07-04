@@ -162,6 +162,7 @@ class Model:
             print('Done loading test data')
 
         if guard_input:
+            word_embeddings = self.get_words_vocab_embed()
             print("Guard input is active. (make sure dataset includes variables-list)")
 
         with open('log.txt', 'w') as output_file:
@@ -177,7 +178,7 @@ class Model:
                 original_batch = batch
                 if guard_input:
                     # TODO: debug this
-                    batch = self.guard_code_batch(batch)
+                    batch = self.guard_code_batch(batch, word_embeddings)
 
                 top_words, top_scores, original_names = self.sess.run(
                     [self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op],
@@ -232,7 +233,7 @@ class Model:
 
         return num_correct_predictions / total_predictions, precision, recall, f1
 
-    def guard_code_batch(self, batch):
+    def guard_code_batch(self, batch, word_embeddings):
         # with ThreadPoolExecutor(max_workers=13) as executor:
         #     result = list(executor.map(lambda r: guard_by_n2p(r, lambda w: w in self.word_to_index),
         #                                batch))
@@ -246,7 +247,7 @@ class Model:
         #                        lambda w: self.get_words_vocab_embed(w)) for r in batch]
         # distance
         result = [codeguard.guard_by_distance(r, lambda w: w in self.word_to_index,
-                               lambda w: self.get_words_vocab_embed(w)) for r in batch]
+                                              lambda w: word_embeddings[self.word_to_index[w]]) for r in batch]
         return result
 
     def evaluate_folder(self):
@@ -436,6 +437,7 @@ class Model:
             self.eval_data_lines = None
 
             if guard_input:
+                word_embeddings = self.get_words_vocab_embed()
                 print("Guard input is active. (make sure dataset includes variables-list)")
             print("Total adversariable data:", len(all_searchers))
             print("Proccesing in batches of:", self.config.TEST_BATCH_SIZE,
@@ -460,7 +462,7 @@ class Model:
                                         for n, c in se[1].pop_unchecked_adversarial_code(return_with_vars=True)]
 
                     batch_nodes_data = [(se, n, codeguard.guard_by_distance(c, lambda w: w in self.word_to_index,
-                                                                            lambda w: self.get_words_vocab_embed(w)))
+                                                                        lambda w: word_embeddings[self.word_to_index[w]]))
                                         for se, n, c in batch_nodes_data]
                     # with ThreadPoolExecutor(max_workers=13) as executor:
                     #     batch_nodes_data = list(executor.map(lambda r: (r[0], r[1], guard_by_n2p(r[2])), batch_nodes_data))
@@ -820,13 +822,14 @@ class Model:
             self.load_model(self.sess)
 
         if guard_input:
+            word_embeddings = self.get_words_vocab_embed()
             print("Guard input is active. (make sure dataset includes variables-list)")
 
         results = []
         for batch in common.split_to_batches(predict_data_lines, 1):
             if guard_input:
                 # TODO: debug this
-                batch = self.guard_code_batch(batch)
+                batch = self.guard_code_batch(batch, word_embeddings)
 
             top_words, top_scores, original_names, attention_weights, source_strings, path_strings, target_strings = self.sess.run(
                 [self.predict_top_words_op, self.predict_top_values_op, self.predict_original_names_op,
@@ -881,7 +884,7 @@ class Model:
 
         return loss_of_input, grad_of_input, source_target_strings
 
-    def get_words_vocab_embed(self, word):
+    def get_words_vocab_embed(self, word = None):
         if word is None:
             result_words_vocab_embed = self.sess.run(self.words_vocab_embed)
             return result_words_vocab_embed

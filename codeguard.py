@@ -77,11 +77,12 @@ def guard_by_distance(code_sample_with_vars, is_word_in_vocab_func, get_embed_fu
 
     both = list(set(existed_variables + list(tokens)))
 
-    # exist_tokens = [v for v in both if is_word_in_vocab_func(v)]
-    # embed = {v:get_embed_func(v) for v in exist_tokens}
     exist_tokens = [v for v in both if is_word_in_vocab_func(v)]
-    embed = get_embed_func(exist_tokens)
-    embed = {v:e for v,e in zip(exist_tokens, embed)}
+    # embed = get_embed_func(exist_tokens)
+    # embed = {v: e for v, e in zip(exist_tokens, embed)}
+    embed = {v:get_embed_func(v) for v in exist_tokens}
+
+
 
     embed_sum = np.sum(list(embed.values()), axis=0)
     # embed = {v: e - (embed_sum / len(embed)) for v, e in embed.items()}
