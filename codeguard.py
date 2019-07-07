@@ -91,12 +91,15 @@ def guard_by_distance(code_sample_with_vars, is_word_in_vocab_func, get_embed_fu
     bad_var = max(dist, key=lambda v: dist[v])
 
     # determine if bad_var is really bad
-    avg_embed = np.mean([embed[v] for v in exist_tokens if v != bad_var], axis=0)
-    distance_distribution = [np.linalg.norm(embed[v] - avg_embed,ord=2) for v in exist_tokens if v != bad_var]
-    distance_mean = np.mean(distance_distribution)
-    distance_std = np.std(distance_distribution)
+    # avg_embed = np.mean([embed[v] for v in exist_tokens if v != bad_var], axis=0)
+    # distance_distribution = [np.linalg.norm(embed[v] - avg_embed,ord=2) for v in exist_tokens if v != bad_var]
+    # distance_mean = np.mean(distance_distribution)
+    # distance_std = np.std(distance_distribution)
 
-    is_truly_bad = abs(np.linalg.norm(embed[bad_var] - avg_embed,ord=2) - distance_mean) < 2 * distance_std
+    # is_truly_bad = abs(np.linalg.norm(embed[bad_var] - avg_embed,ord=2) - distance_mean) > 3 * distance_std or \
+    #                abs(np.linalg.norm(embed[bad_var] - avg_embed, ord=2) - distance_mean) < 2 * distance_std
+
+    is_truly_bad = dist[bad_var] > 3
 
     # print("method:", code.split(" ")[0], "picked:", bad_var, "reallybad:", is_truly_bad, dist, len(dist))
     # print("reallybad:", is_truly_bad, "(mean:{}, std:{},badist:{}".format(distance_mean,distance_std,np.linalg.norm(embed[bad_var] - avg_embed,ord=2)))
