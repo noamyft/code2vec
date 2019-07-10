@@ -222,6 +222,11 @@ class Model:
             print('Done testing, epoch reached')
             output_file.write(str(num_correct_predictions / total_predictions) + '\n')
 
+        precision_var_above0, recall_var_above0, f1_var_above0 = \
+            self.calculate_results(true_positive - measure_by_percentage[0]["TP"],
+                                   false_positive - measure_by_percentage[0]["FP"],
+                                   false_negative - measure_by_percentage[0]["FN"])
+        print('Measurement for var count above 0:: Precision: ' + str(precision_var_above0) + ', recall: ' + str(recall_var_above0) + ', F1: ' + str(f1_var_above0))
         elapsed = int(time.time() - eval_start_time)
         precision, recall, f1 = self.calculate_results(true_positive, false_positive, false_negative)
         print("Evaluation time: %sH:%sM:%sS" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
