@@ -59,7 +59,7 @@ def guard_by_vunk(code_sample_with_vars):
 
     return code
 
-def guard_by_distance(code_sample_with_vars, is_word_in_vocab_func, get_embed_func):
+def guard_by_distance(code_sample_with_vars, is_word_in_vocab_func, get_embed_func, threshold):
     variables, code = common_adversarial.separate_vars_code(code_sample_with_vars)
     variables = common_adversarial.get_all_vars(variables)
     tokens = common_adversarial.get_all_tokens(code)
@@ -99,7 +99,7 @@ def guard_by_distance(code_sample_with_vars, is_word_in_vocab_func, get_embed_fu
     # is_truly_bad = abs(np.linalg.norm(embed[bad_var] - avg_embed,ord=2) - distance_mean) > 3 * distance_std or \
     #                abs(np.linalg.norm(embed[bad_var] - avg_embed, ord=2) - distance_mean) < 2 * distance_std
 
-    is_truly_bad = dist[bad_var] > 3
+    is_truly_bad = dist[bad_var] > threshold
 
     # print("method:", code.split(" ")[0], "picked:", bad_var, "reallybad:", is_truly_bad, dist, len(dist))
     # print("reallybad:", is_truly_bad, "(mean:{}, std:{},badist:{}".format(distance_mean,distance_std,np.linalg.norm(embed[bad_var] - avg_embed,ord=2)))
