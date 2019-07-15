@@ -30,7 +30,7 @@ if __name__ == '__main__':
     parser.add_argument("-tadvdead", "--adversarial_deadcode", dest="adversarial_deadcode", action='store_true', default=False,
                         help="set this flag to use dead-code attack (dataset preprocessed with deadcode required)", required=False)
 
-    parser.add_argument("-grd", "--guard_input", dest="guard_input", type=int,
+    parser.add_argument("-grd", "--guard_input", dest="guard_input", type=float,
                         help="set this flag to use input guard",
                         required=False)
 
