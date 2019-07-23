@@ -10,11 +10,11 @@ def init_deadcode_variable(code, variables):
 
 class AdversarialSearcher():
 
-    def __init__(self, topk, max_depth, model, code, initial_state_generator=None):
+    def __init__(self, topk, max_depth, word_to_indextop, indextop_to_word, code,
+                 initial_state_generator=None):
         self.topk = topk
         self.max_depth = max_depth
-        self.model = model
-
+        self.word_to_indextop, self.indextop_to_word = word_to_indextop, indextop_to_word
 
         # process data line - get vars
         var_code_split_index = code.find(" ")
@@ -33,10 +33,10 @@ class AdversarialSearcher():
             contexts = [c.split(",") for c in contexts[1:] if c != ""]
             self.forbidden_varnames = set()
             for tup in contexts:
-                if tup[0] in model.word_to_index:
-                    self.forbidden_varnames.add(model.word_to_index[tup[0]])
-                if tup[2] in model.word_to_index:
-                    self.forbidden_varnames.add(model.word_to_index[tup[2]])
+                if tup[0] in self.word_to_indextop:
+                    self.forbidden_varnames.add(self.word_to_indextop[tup[0]])
+                if tup[2] in self.word_to_indextop:
+                    self.forbidden_varnames.add(self.word_to_indextop[tup[2]])
             self.forbidden_varnames = list(self.forbidden_varnames)
 
             self.open_state_to_node = {}
@@ -156,7 +156,7 @@ class AdversarialSearcher():
             # words to decrease loss
         # top_replace_with = np.argsort(total_grad)[:topk]
         # TODO: check if len total_grads == len index_to_word -1
-        result = [((original_var, self.model.index_to_word[i]), total_grad[i]) for i in top_replace_with]
+        result = [((original_var, self.indextop_to_word[i]), total_grad[i]) for i in top_replace_with]
 
         return result
 
@@ -165,7 +165,8 @@ class AdversarialSearcher():
 
 class AdversarialTargetedSearcher(AdversarialSearcher):
 
-    def __init__(self, topk, max_depth, model, code, new_target, initial_state_generator=None):
+    def __init__(self, topk, max_depth, word_to_indextop, indextop_to_word, code, new_target,
+                 initial_state_generator=None):
         self.new_target = new_target
         # replace original name with targeted name
         start_original_name = code.find(" ") + 1
@@ -173,7 +174,8 @@ class AdversarialTargetedSearcher(AdversarialSearcher):
         true_target = code[start_original_name:end_original_name]
         code = code[:start_original_name] + self.new_target + code[end_original_name:]
 
-        super().__init__(topk, max_depth, model, code, initial_state_generator=initial_state_generator)
+        super().__init__(topk, max_depth, word_to_indextop, indextop_to_word, code,
+                         initial_state_generator=initial_state_generator)
         self.original_name = true_target
 
 
@@ -236,21 +238,22 @@ class AdversarialTargetedSearcher(AdversarialSearcher):
     #     return None
 
 class AdversarialSearcherTrivial(AdversarialSearcher):
-    def __init__(self, topk, max_depth, model, code, initial_state_generator=None):
-        super().__init__(topk,max_depth, model,code,initial_state_generator)
+    def __init__(self, topk, max_depth, word_to_indextop, indextop_to_word, code,
+                 initial_state_generator=None):
+        super().__init__(topk,max_depth, word_to_indextop, indextop_to_word,code,initial_state_generator)
         self.random_candidates = []
         self.num_of_trials = int(topk**(max_depth + 1) / (topk - 1) - 2)
 
     def _create_states(self, state, model_results, topk):
         original_var, new_var = state
 
-        all_name = np.array(list(self.model.index_to_word.keys()))
+        all_name = np.array(list(self.indextop_to_word.keys()))
         # filter forbidden words
         replace_with = all_name[~np.isin(all_name, self.forbidden_varnames)]
 
         self.random_candidates = random.sample(replace_with.tolist(), self.num_of_trials)
 
-        result = [((original_var, self.model.index_to_word[i]), 0) for i in self.random_candidates]
+        result = [((original_var, self.indextop_to_word[i]), 0) for i in self.random_candidates]
 
         return result
 
@@ -268,8 +271,10 @@ class AdversarialSearcherTrivial(AdversarialSearcher):
         return True
 
 class AdversarialTargetedSearcherTrivial(AdversarialTargetedSearcher):
-    def __init__(self, topk, max_depth, model, code, new_target, initial_state_generator=None):
-        super().__init__(topk, max_depth, model, code, new_target, initial_state_generator)
+    def __init__(self, topk, max_depth, word_to_indextop, indextop_to_word, code, new_target,
+                 initial_state_generator=None):
+        super().__init__(topk, max_depth, word_to_indextop, indextop_to_word, code, new_target,
+                         initial_state_generator)
         self.random_candidates = []
 
     def _create_states(self, state, model_results, topk):

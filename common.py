@@ -23,7 +23,7 @@ class Config:
         config.MAX_TO_KEEP = 10
 
         # Hyper-parameters for adversarial search
-        config.MAX_WORDS_FROM_VOCAB = 10000
+        config.MAX_WORDS_FROM_VOCAB_FOR_ADVERSARIAL = 10000
         config.ADVERSARIAL_MINI_BATCH_SIZE = 256
 
         # Automatically filled, do not edit:
@@ -55,7 +55,7 @@ class Config:
         self.RELEASE = False
 
         # Hyper-parameters for adversarial search
-        self.MAX_WORDS_FROM_VOCAB = 0
+        self.MAX_WORDS_FROM_VOCAB_FOR_ADVERSARIAL = 0
         self.ADVERSARIAL_MINI_BATCH_SIZE = 0
 
 

@@ -5,7 +5,6 @@ import PathContextReader
 import numpy as np
 import time
 import pickle
-import os
 import random
 from common import common, VocabType
 import adversarialsearcher
@@ -14,6 +13,7 @@ from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher
 import codeguard
 from codeguard import guard_by_n2p, guard_by_vunk
 import common_adversarial
+import re
 
 
 class Model:
@@ -364,8 +364,42 @@ class Model:
     #     self.eval_data_lines = None
     #     return results
 
+    def create_ordered_words_dictionary(self, data_path, top_words):
+        with open('{}.dict.c2v'.format(data_path), 'rb') as file:
+            word_to_count = pickle.load(file)
+
+        all_words = list(word_to_count.keys())
+
+        # filter reserved words and invalid variable names
+        reserved_java_words =["abstract", "assert", "boolean", "break", "byte", "case",
+                              "catch", "char", "class", "const", "continue", "default",
+                              "double", "do", "else", "enum", "extends", "false",
+                              "final", "finally", "float", "for", "goto", "if",
+                              "implements", "import", "instanceof", "int", "interface", "long",
+                              "native", "new", "null", "package", "private", "protected",
+                              "public", "return", "short", "static", "strictfp", "super",
+                              "switch", "synchronized", "this", "throw", "throws", "transient",
+                              "true", "try", "void", "volatile", "while"]
+        valid_varname_matcher = re.compile("^[a-z_][a-z_0-9]*$")
+
+        all_words = [w for w in all_words if valid_varname_matcher.match(w)
+                     and w not in reserved_java_words]
+
+        all_words.sort(key=lambda w: (-word_to_count[w], w))
+
+        indextop_to_word = all_words[:top_words]
+        word_to_indextop = {w: i for i, w in enumerate(indextop_to_word)}
+        print('Dictionaries by count created.')
+
+        return word_to_indextop, indextop_to_word
+
     def evaluate_and_adverse(self, depth, topk, targeted_attack, adversarial_target_word,
                              deadcode_attack, guard_input = None, adverse_TP_only = True):
+
+
+        word_to_indextop, indextop_to_word  = self.create_ordered_words_dictionary(
+            Model.get_data_dictionaries_path(self.config.LOAD_PATH),
+            self.config.MAX_WORDS_FROM_VOCAB_FOR_ADVERSARIAL)
 
         eval_start_time = time.time()
         if self.eval_queue is None:
@@ -388,7 +422,8 @@ class Model:
 
         if self.grad_wrt_input is None:
             self.loss_wrt_input, self.grad_wrt_input, self.adversarial_name, self.adversarial_name_index = \
-                self.build_test_graph_with_loss(self.eval_queue.get_filtered_batches(), self.eval_queue)
+                self.build_test_graph_with_loss(self.eval_queue.get_filtered_batches(), self.eval_queue,
+                                                indextop_to_word)
 
         if self.config.LOAD_PATH and not self.config.TRAIN_PATH:
             self.initialize_session_variables(self.sess)
@@ -418,7 +453,9 @@ class Model:
             # untargeted searcher
             if not targeted_attack:
                 print("Using non-targeted attack")
-                all_searchers = [AdversarialSearcher(topk, depth, self, line, variable_picker) for line in self.eval_data_lines]
+                all_searchers = [AdversarialSearcher(topk, depth, word_to_indextop, indextop_to_word,
+                                                     line, variable_picker)
+                                 for line in self.eval_data_lines]
             else: # targeted searcher
                 if adversarial_target_word == "random-uniform":
                     print("Using targeted attack. target sampled uniform-ly")
@@ -437,7 +474,8 @@ class Model:
                         print(adversarial_target_word, "not existed in vocab!")
                         return []
                     get_name = lambda: adversarial_target_word
-                all_searchers = [AdversarialTargetedSearcher(topk, depth, self, line, get_name(), variable_picker)
+                all_searchers = [AdversarialTargetedSearcher(topk, depth, word_to_indextop, indextop_to_word,
+                                                             line, get_name(), variable_picker)
                                  for line in self.eval_data_lines]
 
             all_searchers = [[None, se] for se in all_searchers if se.can_be_adversarial()]
@@ -742,7 +780,7 @@ class Model:
 
         return top_words, top_scores, original_words, attention_weights, source_string, path_string, path_target_string
 
-    def build_test_graph_with_loss(self, input_tensors, queue):
+    def build_test_graph_with_loss(self, input_tensors, queue, words_to_compute_grad):
         with tf.variable_scope('model', reuse=True):
             words_vocab = tf.get_variable('WORDS_VOCAB', shape=(self.word_vocab_size + 1, self.config.EMBEDDINGS_SIZE),
                                           dtype=tf.float32, trainable=False)
@@ -793,22 +831,18 @@ class Model:
 
             grad = tf.gradients([loss], [source_word_embed, target_word_embed])
             grad_source_word_embed, grad_target_word_embed = grad
-
             grad_word_embed = tf.concat([grad_source_word_embed, grad_target_word_embed], axis=1)
-
-            # pf = tfe.py_func(self.my_py_func, [grad_source_word_embed], tf.float32)
-
             grad_word_embed = tf.reshape(grad_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
-            # grad_target_word_embed = tf.reshape(grad_target_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
-            partial_words_vocab = words_vocab[:self.config.MAX_WORDS_FROM_VOCAB]
+
+            # create vocab for adversarial (by given words)
+            given_word_embeddings = [tf.reshape(words_vocab[self.word_to_index[w]],(1,-1)) for w in words_to_compute_grad]
+            partial_words_vocab = tf.concat(given_word_embeddings, axis=0)
             grad_of_input = tf.matmul(grad_word_embed, partial_words_vocab, transpose_b=True)
-            # grad_of_target_input = tf.matmul(grad_target_word_embed, words_vocab, transpose_b=True)
+
 
             max_contexts = self.config.MAX_CONTEXTS
             batched_grad_of_source_input = tf.reshape(grad_of_input,
                                                       [-1, 2 * max_contexts, partial_words_vocab.shape[0]])
-            # batched_grad_of_target_input = tf.reshape(grad_of_target_input,
-            #                                           [-1, max_contexts, words_vocab.shape[0]])
 
         return loss, batched_grad_of_source_input, original_words, original_words_index
 
@@ -924,6 +958,11 @@ class Model:
     def get_target_words_histogram_path(model_file_path):
         dictionaries_save_file_name = "target_words_histogram.bin"
         return '/'.join(model_file_path.split('/')[:-1] + [dictionaries_save_file_name])
+
+    @staticmethod
+    def get_data_dictionaries_path(model_file_path):
+        data_dictionaries_save_file_name = model_file_path.split('/')[-2]
+        return '/'.join(model_file_path.split('/')[:-1] + [data_dictionaries_save_file_name])
 
     def save_model(self, sess, path):
         self.saver.save(sess, path)
