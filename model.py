@@ -564,7 +564,7 @@ class Model:
                 if i % 10 == 0: #self.num_batches_to_log == 0:
                     print("batch:", i, "processed:", processed, "(excluded:", excluded, "trivial:", trivial, ")",
                           "fools: " + str(total_fools) + " fail to fool: " + str(total_failed) +
-                          " success rate: " + str(total_fools / (total_fools+total_failed)
+                          " success rate: {:.2f}%".format(100 * total_fools / (total_fools+total_failed)
                                                                             if total_fools+total_failed > 0 else 0))
                 i += 1
 
@@ -572,11 +572,11 @@ class Model:
 
             print("Final Results:", "processed:", processed, "(excluded:", excluded, "trivial:", trivial, ")",
                           "fools: " + str(total_fools) + " fail to fool: " + str(total_failed) +
-                          " success rate: " + str(total_fools / (total_fools+total_failed)
+                          " success rate: {:.2f}%".format(100 * total_fools / (total_fools+total_failed)
                                                                             if total_fools+total_failed > 0 else 0))
             output_file.write("processed: " + str(processed) + " (excluded:" + str(excluded) + " trivial:" + str(trivial) + ")" +
                               " fools: " + str(total_fools) + " fail to fool: " + str(total_failed) +
-                              " success rate: " + str(total_fools / (total_fools+total_failed)
+                              " success rate: {:.2f}%".format(100 * total_fools / (total_fools+total_failed)
                                                                             if total_fools+total_failed > 0 else 0) + '\n')
 
         elapsed = int(time.time() - eval_start_time)
