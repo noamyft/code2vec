@@ -3,7 +3,8 @@ import pickle
 from common import Config, VocabType
 from argparse import ArgumentParser
 from interactive_predict import InteractivePredictor
-from interactive_predict_adversarial_search import InteractivePredictorAdvMonoSearch, InteractivePredictorAdvSimilarSearch
+from interactive_predict_adversarial_search import InteractivePredictorAdvMonoSearch, \
+    InteractivePredictorAdvSimilarSearch, InteractivePredictorAdversarialBFS
 from model import Model
 import sys
 
@@ -15,8 +16,23 @@ if __name__ == '__main__':
                         help="path to test file", metavar="FILE", required=False)
     parser.add_argument("-tfold", "--test_folder", dest="test_folder", action='store_true',
                         help="set this flag to do test on folder", required=False)
+
     parser.add_argument("-tadv", "--test_adversarial", dest="test_adversarial", action='store_true',
                         help="set this flag to do test with adversarial", required=False)
+    parser.add_argument("-tadvdep", "--adversarial_depth", dest="adversarial_depth", default=2,
+                        help="set this flag to determine the depth of BFS search", required=False)
+    parser.add_argument("-tadvtopk", "--adversarial_topk", dest="adversarial_topk", default=2,
+                        help="set this flag to determine the width of BFS search", required=False)
+    parser.add_argument("-tadvtype", "--adversarial_type", dest="adversarial_type",
+                        help="choose the type of attack. can be 'targeted' or 'non-targeted'", required=False)
+    parser.add_argument("-tadvtrgt", "--adversarial_target", dest="adversarial_target",
+                        help="choose desired target. or choose 'random-uniform'/'random-unigram' to select random target uniformly/unigramly", required=False)
+    parser.add_argument("-tadvdead", "--adversarial_deadcode", dest="adversarial_deadcode", action='store_true', default=False,
+                        help="set this flag to use dead-code attack (dataset preprocessed with deadcode required)", required=False)
+
+    parser.add_argument("-grd", "--guard_input", dest="guard_input", type=float,
+                        help="set this flag to use input guard",
+                        required=False)
 
     is_training = '--train' in sys.argv or '-tr' in sys.argv
     parser.add_argument("-s", "--save", dest="save_path",
@@ -51,7 +67,7 @@ if __name__ == '__main__':
         print('Target word vectors saved in word2vec text format in: %s' % args.save_t2v)
     if config.TEST_PATH and not args.data_path:
         if not args.test_folder and not args.test_adversarial:
-            eval_results = model.evaluate()
+            eval_results = model.evaluate(guard_input=args.guard_input)
             if eval_results is not None:
                 results, precision, recall, f1 = eval_results
                 print(results)
@@ -62,17 +78,27 @@ if __name__ == '__main__':
                 pickle.dump(eval_results, handle)
             # print(eval_results)
         elif args.test_adversarial:
-            eval_results = model.evaluate_and_adverse(2,2)
+            eval_results = model.evaluate_and_adverse(int(args.adversarial_depth),
+                                                      int(args.adversarial_topk),
+                                                      targeted_attack=args.adversarial_type=="targeted",
+                                                      adversarial_target_word=args.adversarial_target,
+                                                      deadcode_attack=args.adversarial_deadcode,
+                                                      guard_input=args.guard_input)
             with open("total_adversarial_results_" + config.TEST_PATH.replace("/", "").replace("\\", "") + ".pickle",
                       'wb') as handle:
                 pickle.dump(eval_results, handle)
 
     if args.predict:
-
-        # manual adversarial search
-        # predictor = InteractivePredictor(config, model)
+        if not args.test_adversarial:
+            # manual adversarial search
+            predictor = InteractivePredictor(config, model)
+        else:
+            predictor = InteractivePredictorAdversarialBFS(config, model,
+                                                           int(args.adversarial_topk),
+                                                           int(args.adversarial_depth),
+                                                           args.guard_input, True)
         # automatic search for something
-        predictor = InteractivePredictorAdvMonoSearch(config, model)
+        # predictor = InteractivePredictorAdvMonoSearch(config, model)
         # automatic search similar name
         # predictor = InteractivePredictorAdvSimilarSearch(config, model)
         predictor.predict()

@@ -1,17 +1,20 @@
-from common import common
-from realextractor import RealExtractor
 import numpy as np
-import re
-from interactive_predict import InteractivePredictor
-from gensim.models import KeyedVectors as word2vec
+import random
+
+# def overrideVariables(newVarList, code):
+#     var_code_split_index = code.find(" ")
+#     return ",".join(newVarList) + code[var_code_split_index:]
+
+def init_deadcode_variable(code, variables):
+    return [("zpkjxq","zpkjxq")]
 
 class AdversarialSearcher():
 
-    def __init__(self, topk, max_depth, model, code):
+    def __init__(self, topk, max_depth, word_to_indextop, indextop_to_word, code,
+                 initial_state_generator=None):
         self.topk = topk
         self.max_depth = max_depth
-        self.model = model
-
+        self.word_to_indextop, self.indextop_to_word = word_to_indextop, indextop_to_word
 
         # process data line - get vars
         var_code_split_index = code.find(" ")
@@ -30,16 +33,20 @@ class AdversarialSearcher():
             contexts = [c.split(",") for c in contexts[1:] if c != ""]
             self.forbidden_varnames = set()
             for tup in contexts:
-                if tup[0] in model.word_to_index:
-                    self.forbidden_varnames.add(model.word_to_index[tup[0]])
-                if tup[2] in model.word_to_index:
-                    self.forbidden_varnames.add(model.word_to_index[tup[2]])
+                if tup[0] in self.word_to_indextop:
+                    self.forbidden_varnames.add(self.word_to_indextop[tup[0]])
+                if tup[2] in self.word_to_indextop:
+                    self.forbidden_varnames.add(self.word_to_indextop[tup[2]])
             self.forbidden_varnames = list(self.forbidden_varnames)
 
             self.open_state_to_node = {}
             self.close_state_to_node = {}
             self.unchecked_nodes = []
-            init_states = [(s, 0) for s in self._get_init_state(self.original_code, self.vars)]
+
+            if initial_state_generator == None:
+                initial_state_generator = self._get_init_state
+
+            init_states = [(s, 0) for s in initial_state_generator(self.original_code, self.vars)]
             self._update_open(init_states, 0)
 
             current_state, self.current_node = self._select_best_state()
@@ -50,14 +57,17 @@ class AdversarialSearcher():
     def can_be_adversarial(self):
         return self.vars != ""
 
-    def get_adversarial_code(self):
+    def get_adversarial_code(self, return_with_vars=False):
         assert self.current_node is not None
             # return None
-        return self._apply_state(self.original_code, self.current_node["state"])
+        return self._apply_state(self.original_code, self.current_node["state"], return_with_vars=return_with_vars)
 
-    def pop_unchecked_adversarial_code(self):
+    def pop_unchecked_adversarial_code(self, return_with_vars=False):
+        if not self.unchecked_nodes:
+            self.unchecked_nodes = [self.current_node]
 
-        res = [(node, self._apply_state(self.original_code, node["state"])) for node in self.unchecked_nodes]
+        res = [(node, self._apply_state(self.original_code, node["state"], return_with_vars=return_with_vars))
+               for node in self.unchecked_nodes]
         del self.unchecked_nodes
         self.unchecked_nodes = []
         return res
@@ -72,14 +82,17 @@ class AdversarialSearcher():
     #     return self.adversarial_code
 
     def _get_init_state(self, code, variables):
-        # TODO: use .lower when get vars - ans: Done in constructor
         return [(variables[0],variables[0])]
 
-    def _apply_state(self, code, state):
+    def _apply_state(self, code, state, return_with_vars=False):
         original_var, new_var = state
 
         new_code = code.replace(" " + original_var + ",", " " + new_var + ",")\
             .replace("," + original_var + " ", "," + new_var + " ")
+
+        if return_with_vars:
+            return_vars = [v for v in self.vars if v != original_var] + [new_var]
+            new_code = ",".join(return_vars) + " " + new_code
 
         return new_code
 
@@ -143,12 +156,42 @@ class AdversarialSearcher():
             # words to decrease loss
         # top_replace_with = np.argsort(total_grad)[:topk]
         # TODO: check if len total_grads == len index_to_word -1
-        result = [((original_var, self.model.index_to_word[i]), total_grad[i]) for i in top_replace_with]
+        result = [((original_var, self.indextop_to_word[i]), total_grad[i]) for i in top_replace_with]
 
         return result
 
     def _select_best_state(self):
         return max(self.open_state_to_node.items(), key=lambda n: n[1]["score"])
+
+class AdversarialTargetedSearcher(AdversarialSearcher):
+
+    def __init__(self, topk, max_depth, word_to_indextop, indextop_to_word, code, new_target,
+                 initial_state_generator=None):
+        self.new_target = new_target
+        # replace original name with targeted name
+        start_original_name = code.find(" ") + 1
+        end_original_name = code.find(" ", start_original_name)
+        true_target = code[start_original_name:end_original_name]
+        code = code[:start_original_name] + self.new_target + code[end_original_name:]
+
+        super().__init__(topk, max_depth, word_to_indextop, indextop_to_word, code,
+                         initial_state_generator=initial_state_generator)
+        self.original_name = true_target
+
+
+    def is_target_found(self, predictions):
+
+        return predictions[0] == self.new_target
+
+    def get_adversarial_name(self):
+        return self.new_target
+
+    def _create_states(self, state, model_results, topk):
+        loss, all_strings, all_grads = model_results
+
+        res = super()._create_states(state,(loss, all_strings, -all_grads),topk)
+
+        return res
 
 
 #######################################################################################
@@ -194,5 +237,64 @@ class AdversarialSearcher():
     #     # print("Tried (total:", len(close),") :: ", close)
     #     return None
 
+class AdversarialSearcherTrivial(AdversarialSearcher):
+    def __init__(self, topk, max_depth, word_to_indextop, indextop_to_word, code,
+                 initial_state_generator=None):
+        super().__init__(topk,max_depth, word_to_indextop, indextop_to_word,code,initial_state_generator)
+        self.random_candidates = []
+        self.num_of_trials = int(topk**(max_depth + 1) / (topk - 1) - 2)
 
+    def _create_states(self, state, model_results, topk):
+        original_var, new_var = state
 
+        all_name = np.array(list(self.indextop_to_word.keys()))
+        # filter forbidden words
+        replace_with = all_name[~np.isin(all_name, self.forbidden_varnames)]
+
+        self.random_candidates = random.sample(replace_with.tolist(), self.num_of_trials)
+
+        result = [((original_var, self.indextop_to_word[i]), 0) for i in self.random_candidates]
+
+        return result
+
+    def next(self, model_grads):
+        if self.random_candidates:
+            return False
+
+        # create new states
+        new_states = self._create_states(self.current_node["state"], model_grads, self.topk)
+
+        self._update_open(new_states, self.current_node["level"] + 1)
+        # clear open (because we already generate enough possibilities)
+        self.open_state_to_node.clear()
+
+        return True
+
+class AdversarialTargetedSearcherTrivial(AdversarialTargetedSearcher):
+    def __init__(self, topk, max_depth, word_to_indextop, indextop_to_word, code, new_target,
+                 initial_state_generator=None):
+        super().__init__(topk, max_depth, word_to_indextop, indextop_to_word, code, new_target,
+                         initial_state_generator)
+        self.random_candidates = []
+
+    def _create_states(self, state, model_results, topk):
+        original_var, new_var = state
+
+        self.random_candidates = [self.new_target.replace("|","")]
+
+        result = [((original_var, self.new_target.replace("|","")), 0)]
+
+        return result
+
+    def next(self, model_grads):
+        if self.random_candidates:
+            return False
+
+        # create new states
+        new_states = self._create_states(self.current_node["state"], model_grads, self.topk)
+
+        self._update_open(new_states, self.current_node["level"] + 1)
+        # clear open (because we already generate enough possibilities)
+        self.open_state_to_node.clear()
+
+        return True

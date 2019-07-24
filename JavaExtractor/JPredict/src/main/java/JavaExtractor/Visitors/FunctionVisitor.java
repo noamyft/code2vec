@@ -49,13 +49,15 @@ public class FunctionVisitor extends VoidVisitorAdapter<Object> {
                     node.accept(new VoidVisitorAdapter<Void>(){
                         @Override
                         public void visit(VariableDeclarationExpr n, Void arg) {
-                            Set<String> myVars = n.getVariables().stream().map(var -> var.getId().getName()).collect(Collectors.toSet());
+                            Set<String> myVars = n.getVariables().stream()
+									.map(var -> Common.normalizeName(var.getId().getName(), Common.BlankWord))
+									.collect(Collectors.toSet());
                             variables.addAll(myVars);
                             super.visit(n, arg); //To change body of generated methods, choose Tools | Templates.
                         }
                         @Override
                         public void visit(Parameter n, Void arg) {
-                            variables.add(n.getName());
+                            variables.add(Common.normalizeName(n.getName(), Common.BlankWord));
                             super.visit(n, arg); //To change body of generated methods, choose Tools | Templates.
                         }
                         

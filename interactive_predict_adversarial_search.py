@@ -1,8 +1,8 @@
 import traceback
 
-from adversarialsearcher import AdversarialSearcher
+from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher
 from common import common
-from realextractor import RealExtractor
+from realextractor import RealExtractor, RealExtractorForAdversarial
 import numpy as np
 import re
 from interactive_predict import InteractivePredictor
@@ -15,7 +15,126 @@ MAX_PATH_WIDTH = 2
 JAR_PATH = 'JavaExtractor/JPredict/target/JavaExtractor-0.0.1-SNAPSHOT.jar'
 FULL_DICT_PATH_AND_NAME = 'data/java-large/java-large'
 
+class InteractivePredictorAdversarialBFS(InteractivePredictor):
+    exit_keywords = ['exit', 'quit', 'q']
 
+    def __init__(self, config, model, topk, max_depth, guard_search = False, multiple_results = False):
+        model.predict([])
+        self.model = model
+        self.config = config
+
+        print("PLEASE NOTE: this version of InteractivePredictor use the full dictionary located in:",
+              FULL_DICT_PATH_AND_NAME)
+        self.path_extractor = RealExtractorForAdversarial(config,
+                                            jar_path=JAR_PATH,
+                                            max_path_length=MAX_PATH_LENGTH,
+                                            max_path_width=MAX_PATH_WIDTH,
+                                            path_dict_and_name=FULL_DICT_PATH_AND_NAME)
+
+        self.topk = topk
+        self.max_depth = max_depth
+        self.guard_input = guard_search
+        self.multiple_results = multiple_results
+
+    def predict(self):
+        input_filename = 'Input.java'
+        # MAX_ATTEMPTS = 50
+        # MAX_NODES_TO_OPEN = 10
+
+        print('Starting interactive prediction with BFS adversarial search...')
+        while True:
+            print(
+                'Modify the file: "%s" and press any key when ready, or "q" / "quit" / "exit" to exit' % input_filename)
+            user_input = input()
+            if user_input.lower() in self.exit_keywords:
+                print('Exiting...')
+                return
+
+
+
+            with open(input_filename, "r") as f:
+                original_code = f.read()
+
+            try:
+                predict_lines, hash_to_string_dict = self.path_extractor.extract_paths(input_filename)
+            except ValueError as e:
+                print(e)
+                continue
+
+            var_code_split_index = predict_lines[0].find(" ")
+            original_code = predict_lines[0][var_code_split_index + 1:]
+
+            results = self.model.predict([original_code])
+            prediction_results = common.parse_results(results, hash_to_string_dict, topk=SHOW_TOP_CONTEXTS)
+            for method_prediction in prediction_results:
+                print('Original name:\t' + method_prediction.original_name)
+                for name_prob_pair in method_prediction.predictions:
+                    print('\t(%f) predicted: %s' % (name_prob_pair['probability'], name_prob_pair['name']))
+
+            # Search for adversarial examples
+            print("select variable to rename:")
+            var_to_rename = input()
+
+            while True:
+                print("select attack type: 'nontargeted' for non-targeted attack")
+                print("OR target method name for targeted attack (each word id seperated by |)")
+                attack_type = input()
+
+                # untargeted searcher
+                if attack_type == "nontargeted":
+                    print("Using non-targeted attack")
+                    searcher = AdversarialSearcher(self.topk, self.max_depth, self.model, predict_lines[0],
+                                                   lambda c, v: [(var_to_rename, var_to_rename)])
+                    break
+
+                else: # targeted searcher
+                    if attack_type in self.model.target_word_to_index:
+                        print("Using targeted attack. target:", attack_type)
+                        searcher = AdversarialTargetedSearcher(self.topk, self.max_depth, self.model,
+                                                              predict_lines[0], attack_type,
+                                                              lambda c, v: [(var_to_rename, var_to_rename)])
+                        break
+
+                    print(attack_type, "not existed in vocab! try again")
+
+            adversarial_results = []
+            # original_prediction = '|'.join(method_prediction.predictions[0]['name'])
+
+            while True:
+                batch_nodes_data = [(n, c) for n, c in searcher.pop_unchecked_adversarial_code()]
+                batch_data = [c for _, c in batch_nodes_data]
+                results = self.model.predict(batch_data, self.guard_input)
+                for (node, _), res in zip(batch_nodes_data, results):
+                    one_top_words = res[1]
+                    one_top_words = common.filter_impossible_names(one_top_words)
+                    if not one_top_words:
+                        print("code with state: " +
+                                          str(node) + " cause empty predictions\n")
+                        continue
+
+                    if searcher.is_target_found(one_top_words):
+                        adversarial_results.append((one_top_words[0],node))
+
+
+                if adversarial_results and not self.multiple_results:
+                    break
+
+                batch_data = [searcher.get_adversarial_code()]
+                loss, all_grads, all_strings = self.model.calc_loss_and_gradients_wrt_input(batch_data)
+                if not searcher.next((0, all_strings[0], all_grads[0])):
+                    break
+
+            if not results:
+                print("FAILD! no replaces found")
+            else:
+                print("variable replaces:")
+                print("Prediction\tnode")
+                for r in adversarial_results:
+                    print(r[0],"\t",r[1])
+
+
+
+# Old Code
 class InteractivePredictorAdvMonoSearch(InteractivePredictor):
     exit_keywords = ['exit', 'quit', 'q']
 
