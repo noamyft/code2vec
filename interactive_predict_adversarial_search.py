@@ -41,7 +41,12 @@ class InteractivePredictorAdversarialBFS(InteractivePredictor):
         # MAX_ATTEMPTS = 50
         # MAX_NODES_TO_OPEN = 10
 
-        print('Starting interactive prediction with BFS adversarial search...')
+        word_to_indextop, indextop_to_word = self.model.create_ordered_words_dictionary(
+            self.model.get_data_dictionaries_path(self.config.LOAD_PATH),
+            self.config.MAX_WORDS_FROM_VOCAB_FOR_ADVERSARIAL)
+
+        print('Starting interactive prediction with BFS adversarial search... (depth = {}, topk = {})'
+              .format(self.max_depth, self.topk))
         while True:
             print(
                 'Modify the file: "%s" and press any key when ready, or "q" / "quit" / "exit" to exit' % input_filename)
@@ -77,20 +82,20 @@ class InteractivePredictorAdversarialBFS(InteractivePredictor):
 
             while True:
                 print("select attack type: 'nontargeted' for non-targeted attack")
-                print("OR target method name for targeted attack (each word id seperated by |)")
+                print("OR target method name for targeted attack (each word is seperated by |)")
                 attack_type = input()
 
                 # untargeted searcher
                 if attack_type == "nontargeted":
                     print("Using non-targeted attack")
-                    searcher = AdversarialSearcher(self.topk, self.max_depth, self.model, predict_lines[0],
+                    searcher = AdversarialSearcher(self.topk, self.max_depth, word_to_indextop, indextop_to_word, predict_lines[0],
                                                    lambda c, v: [(var_to_rename, var_to_rename)])
                     break
 
                 else: # targeted searcher
                     if attack_type in self.model.target_word_to_index:
                         print("Using targeted attack. target:", attack_type)
-                        searcher = AdversarialTargetedSearcher(self.topk, self.max_depth, self.model,
+                        searcher = AdversarialTargetedSearcher(self.topk, self.max_depth, word_to_indextop, indextop_to_word,
                                                               predict_lines[0], attack_type,
                                                               lambda c, v: [(var_to_rename, var_to_rename)])
                         break
@@ -120,7 +125,7 @@ class InteractivePredictorAdversarialBFS(InteractivePredictor):
                     break
 
                 batch_data = [searcher.get_adversarial_code()]
-                loss, all_grads, all_strings = self.model.calc_loss_and_gradients_wrt_input(batch_data)
+                loss, all_grads, all_strings = self.model.calc_loss_and_gradients_wrt_input(batch_data, indextop_to_word)
                 if not searcher.next((0, all_strings[0], all_grads[0])):
                     break
 

@@ -885,7 +885,7 @@ class Model:
             results.append((original_names[0], top_words[0], top_scores[0], attention_per_path))
         return results
 
-    def calc_loss_and_gradients_wrt_input(self, predict_data_lines):
+    def calc_loss_and_gradients_wrt_input(self, predict_data_lines, words_to_compute_grad):
         if self.predict_queue is None:
             self.predict_queue = PathContextReader.PathContextReader(word_to_index=self.word_to_index,
                                                                      path_to_index=self.path_to_index,
@@ -902,7 +902,8 @@ class Model:
 
         if self.grad_wrt_input is None:
             self.loss_wrt_input, self.grad_wrt_input, self.adversarial_name, self.adversarial_name_index = \
-                self.build_test_graph_with_loss(self.predict_queue.get_filtered_batches(), self.predict_queue)
+                self.build_test_graph_with_loss(self.predict_queue.get_filtered_batches(), self.predict_queue,
+                                                words_to_compute_grad)
 
         source_target_tensor = tf.cond(
             tf.not_equal(tf.rank(self.predict_source_string), 1),
