@@ -780,7 +780,7 @@ class Model:
 
         return top_words, top_scores, original_words, attention_weights, source_string, path_string, path_target_string
 
-    def build_test_graph_with_loss(self, input_tensors, queue, words_to_compute_grad):
+    def build_test_graph_with_loss(self, input_tensors, queue, adversary_words_in_vocab):
         with tf.variable_scope('model', reuse=True):
             words_vocab = tf.get_variable('WORDS_VOCAB', shape=(self.word_vocab_size + 1, self.config.EMBEDDINGS_SIZE),
                                           dtype=tf.float32, trainable=False)
@@ -835,8 +835,8 @@ class Model:
             grad_word_embed = tf.reshape(grad_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
 
             # create vocab for adversarial (by given words)
-            given_word_embeddings = [tf.reshape(words_vocab[self.word_to_index[w]],(1,-1)) for w in words_to_compute_grad]
-            partial_words_vocab = tf.concat(given_word_embeddings, axis=0)
+            adversary_word_embeddings = [tf.reshape(words_vocab[self.word_to_index[w]],(1,-1)) for w in adversary_words_in_vocab]
+            partial_words_vocab = tf.concat(adversary_word_embeddings, axis=0)
             grad_of_input = tf.matmul(grad_word_embed, partial_words_vocab, transpose_b=True)
 
 
