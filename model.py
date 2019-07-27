@@ -16,6 +16,14 @@ import common_adversarial
 import re
 
 
+def my_py_func(grad_word_embed, path_source_target_tensor, words_to_compute_grads, partial_words_vocab):
+    mask = tf.equal(words_to_compute_grads, path_source_target_tensor)
+    grad_word_embed = tf.reduce_sum(tf.multiply(grad_word_embed, tf.expand_dims(tf.cast(mask, tf.float32), -1)), axis=1)
+
+    grad_of_input = tf.matmul(grad_word_embed, partial_words_vocab, transpose_b=True)
+
+    return grad_of_input
+
 class Model:
     topk = 10
     num_batches_to_log = 100
@@ -413,17 +421,12 @@ class Model:
                 self.build_test_graph(self.eval_queue.get_filtered_batches())
             self.saver = tf.train.Saver()
 
-            source_target_tensor = tf.cond(
-                tf.not_equal(tf.rank(self.eval_source_string), 1),
-                lambda : tf.concat([self.eval_source_string, self.eval_path_target_string], axis=1),
-                lambda : tf.concat(
-                [tf.expand_dims(self.eval_source_string, axis=0), tf.expand_dims(self.eval_path_target_string, axis=0)],
-                axis=1))
-
         if self.grad_wrt_input is None:
+            self.words_to_compute_grads = tf.placeholder(tf.string, [None])
+
             self.loss_wrt_input, self.grad_wrt_input, self.adversarial_name, self.adversarial_name_index = \
                 self.build_test_graph_with_loss(self.eval_queue.get_filtered_batches(), self.eval_queue,
-                                                indextop_to_word)
+                                                indextop_to_word, self.words_to_compute_grads)
 
         if self.config.LOAD_PATH and not self.config.TRAIN_PATH:
             self.initialize_session_variables(self.sess)
@@ -565,6 +568,7 @@ class Model:
 
                 batch_searchers = [s for s in new_batch_searchers if s[1] not in searcher_done]
                 batch_data = [se[1].get_adversarial_code() for se in batch_searchers]
+                batch_word_to_derive = [se[1].get_word_to_derive() for se in batch_searchers]
                 # if all methods fails - continue without grad calculation
                 if not batch_searchers:
                     continue
@@ -574,19 +578,20 @@ class Model:
                 while batch_data:
                     mini_batch_searchers = batch_searchers[:self.config.ADVERSARIAL_MINI_BATCH_SIZE]
                     mini_batch_data = batch_data[:self.config.ADVERSARIAL_MINI_BATCH_SIZE]
+                    mini_batch_word_to_derive = batch_word_to_derive[:self.config.ADVERSARIAL_MINI_BATCH_SIZE]
                     del batch_searchers[:self.config.ADVERSARIAL_MINI_BATCH_SIZE]
                     del batch_data[:self.config.ADVERSARIAL_MINI_BATCH_SIZE]
+                    del batch_word_to_derive[:self.config.ADVERSARIAL_MINI_BATCH_SIZE]
 
-                    loss_of_input, grad_of_input, source_target_strings  = self.sess.run(
+                    loss_of_input, grad_of_input  = self.sess.run(
                         [self.loss_wrt_input,
-                         self.grad_wrt_input,
-                         source_target_tensor],
-                        feed_dict={self.eval_placeholder: mini_batch_data})
+                         self.grad_wrt_input],
+                        feed_dict={self.eval_placeholder: mini_batch_data, self.words_to_compute_grads: mini_batch_word_to_derive})
 
-                    source_target_strings = np.array(common.binary_to_string_matrix(source_target_strings))
+                    # source_target_strings = np.array(common.binary_to_string_matrix(source_target_strings))
 
-                    for searcher, strings, grads in zip(mini_batch_searchers, source_target_strings, grad_of_input):
-                        if not searcher[1].next((0, strings, grads)):
+                    for searcher, grads in zip(mini_batch_searchers, grad_of_input):
+                        if not searcher[1].next((0, "", grads)):
                             total_failed += 1
                             out = "\t" + searcher[1].get_original_name() + \
                                   "\t" + searcher[0] + \
@@ -780,8 +785,10 @@ class Model:
 
         return top_words, top_scores, original_words, attention_weights, source_string, path_string, path_target_string
 
-    def build_test_graph_with_loss(self, input_tensors, queue, adversary_words_in_vocab):
+    def build_test_graph_with_loss(self, input_tensors, queue, adversary_words_in_vocab, words_to_compute_grads):
+        words_to_compute_grads = tf.reshape(words_to_compute_grads, [-1, 1])
         with tf.variable_scope('model', reuse=True):
+
             words_vocab = tf.get_variable('WORDS_VOCAB', shape=(self.word_vocab_size + 1, self.config.EMBEDDINGS_SIZE),
                                           dtype=tf.float32, trainable=False)
             target_words_vocab = tf.get_variable('TARGET_WORDS_VOCAB',
@@ -832,17 +839,37 @@ class Model:
             grad = tf.gradients([loss], [source_word_embed, target_word_embed])
             grad_source_word_embed, grad_target_word_embed = grad
             grad_word_embed = tf.concat([grad_source_word_embed, grad_target_word_embed], axis=1)
-            grad_word_embed = tf.reshape(grad_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
+
+            # filter unrelevant var names
+            path_source_target_tensor = tf.cond(
+                tf.not_equal(tf.rank(self.eval_source_string), 1),
+                lambda: tf.concat([self.eval_source_string, self.eval_path_target_string], axis=1),
+                lambda: tf.concat(
+                    [tf.expand_dims(self.eval_source_string, axis=0),
+                     tf.expand_dims(self.eval_path_target_string, axis=0)],
+                    axis=1))
 
             # create vocab for adversarial (by given words)
-            adversary_word_embeddings = [tf.reshape(words_vocab[self.word_to_index[w]],(1,-1)) for w in adversary_words_in_vocab]
+            # grad_word_embed = tf.reshape(grad_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
+            adversary_word_embeddings = [tf.reshape(words_vocab[self.word_to_index[w]], (1, -1)) for w in adversary_words_in_vocab]
             partial_words_vocab = tf.concat(adversary_word_embeddings, axis=0)
+
+            # filter only given vars
+            mask = tf.equal(words_to_compute_grads, path_source_target_tensor)
+            grad_word_embed = tf.reduce_sum(tf.multiply(grad_word_embed, tf.expand_dims(tf.cast(mask, tf.float32), -1)),
+                                            axis=1)
+
             grad_of_input = tf.matmul(grad_word_embed, partial_words_vocab, transpose_b=True)
 
+            # grad_of_input = tf.contrib.eager.py_func(my_py_func,
+            #                                          [grad_word_embed, path_source_target_tensor, words_to_compute_grads, partial_words_vocab],
+            #                                          tf.float32)
 
-            max_contexts = self.config.MAX_CONTEXTS
-            batched_grad_of_source_input = tf.reshape(grad_of_input,
-                                                      [-1, 2 * max_contexts, partial_words_vocab.shape[0]])
+            batched_grad_of_source_input = grad_of_input
+
+            # max_contexts = self.config.MAX_CONTEXTS
+            # batched_grad_of_source_input = tf.reshape(grad_of_input,
+            #                                           [-1, 2 * max_contexts, partial_words_vocab.shape[0]])
 
         return loss, batched_grad_of_source_input, original_words, original_words_index
 

@@ -62,6 +62,11 @@ class AdversarialSearcher():
             # return None
         return self._apply_state(self.original_code, self.current_node["state"], return_with_vars=return_with_vars)
 
+    def get_word_to_derive(self, return_with_vars=False):
+        assert self.current_node is not None
+            # return None
+        return self.current_node["state"][1]
+
     def pop_unchecked_adversarial_code(self, return_with_vars=False):
         if not self.unchecked_nodes:
             self.unchecked_nodes = [self.current_node]
@@ -137,14 +142,18 @@ class AdversarialSearcher():
     def _create_states(self, state, model_results, topk):
         original_var, new_var = state
 
+        loss, all_strings, total_grad = model_results
+        # TODO: old code - gets all gradients and filter right varnames
         loss, all_strings, all_grads = model_results
-        indecies_of_var = np.argwhere(all_strings == new_var).flatten()
-        grads_of_var = all_grads[indecies_of_var]
-        if grads_of_var.shape[0] == 0:
-            return []
-            # print("current loss:",loss)
-        total_grad = np.sum(grads_of_var, axis=0)
-        # # words to increase loss
+        # indecies_of_var = np.argwhere(all_strings == new_var).flatten()
+        # grads_of_var = all_grads[indecies_of_var]
+        # if grads_of_var.shape[0] == 0:
+        #     return []
+        #     # print("current loss:",loss)
+        # total_grad = np.sum(grads_of_var, axis=0)
+        # # # words to increase loss
+
+
         top_replace_with = np.argsort(total_grad)[::-1]
         # filter forbidden words
         top_replace_with = top_replace_with[~np.isin(top_replace_with,self.forbidden_varnames)]
