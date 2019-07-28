@@ -404,7 +404,7 @@ class Model:
     def evaluate_and_adverse(self, depth, topk, targeted_attack, adversarial_target_word,
                              deadcode_attack, guard_input = None, adverse_TP_only = True):
 
-
+        topk_words_from_model = 100
         word_to_indextop, indextop_to_word  = self.create_ordered_words_dictionary(
             Model.get_data_dictionaries_path(self.config.LOAD_PATH),
             self.config.MAX_WORDS_FROM_VOCAB_FOR_ADVERSARIAL)
@@ -426,7 +426,7 @@ class Model:
 
             self.loss_wrt_input, self.grad_wrt_input, self.adversarial_name, self.adversarial_name_index = \
                 self.build_test_graph_with_loss(self.eval_queue.get_filtered_batches(), self.eval_queue,
-                                                indextop_to_word, self.words_to_compute_grads)
+                                                indextop_to_word, self.words_to_compute_grads, topk_words_from_model)
 
         if self.config.LOAD_PATH and not self.config.TRAIN_PATH:
             self.initialize_session_variables(self.sess)
@@ -785,7 +785,8 @@ class Model:
 
         return top_words, top_scores, original_words, attention_weights, source_string, path_string, path_target_string
 
-    def build_test_graph_with_loss(self, input_tensors, queue, adversary_words_in_vocab, words_to_compute_grads):
+    def build_test_graph_with_loss(self, input_tensors, queue, adversary_words_in_vocab, words_to_compute_grads,
+                                   topk_results = None):
         words_to_compute_grads = tf.reshape(words_to_compute_grads, [-1, 1])
         with tf.variable_scope('model', reuse=True):
 
@@ -865,7 +866,14 @@ class Model:
             #                                          [grad_word_embed, path_source_target_tensor, words_to_compute_grads, partial_words_vocab],
             #                                          tf.float32)
 
-            batched_grad_of_source_input = grad_of_input
+            if topk_results is None:
+                batched_grad_of_source_input = grad_of_input
+            else:
+                top_values, top_indices  = tf.math.top_k(grad_of_input, k=topk_results)
+                bottom_values, bottom_indices = tf.math.top_k(-grad_of_input, k=topk_results)
+                values = tf.concat([top_values, -bottom_values], axis=-1)
+                indices = tf.concat([top_indices, bottom_indices], axis=-1)
+                batched_grad_of_source_input = tf.stack([tf.cast(indices, tf.float32), values], axis=1)
 
             # max_contexts = self.config.MAX_CONTEXTS
             # batched_grad_of_source_input = tf.reshape(grad_of_input,

@@ -144,7 +144,7 @@ class AdversarialSearcher():
 
         loss, all_strings, total_grad = model_results
         # TODO: old code - gets all gradients and filter right varnames
-        loss, all_strings, all_grads = model_results
+        # loss, all_strings, all_grads = model_results
         # indecies_of_var = np.argwhere(all_strings == new_var).flatten()
         # grads_of_var = all_grads[indecies_of_var]
         # if grads_of_var.shape[0] == 0:
@@ -152,11 +152,16 @@ class AdversarialSearcher():
         #     # print("current loss:",loss)
         # total_grad = np.sum(grads_of_var, axis=0)
         # # # words to increase loss
-
-
-        top_replace_with = np.argsort(total_grad)[::-1]
+        # top_replace_with = np.argsort(total_grad)[::-1]
         # filter forbidden words
-        top_replace_with = top_replace_with[~np.isin(top_replace_with,self.forbidden_varnames)]
+        # top_replace_with = top_replace_with[~np.isin(top_replace_with, self.forbidden_varnames)]
+
+        indices = total_grad[0]
+        values = total_grad[1]
+        arg_sort = np.argsort(values)[::-1]
+        top_replace_with = list(zip(indices[arg_sort].astype(int), values[arg_sort]))
+        # filter forbidden words
+        top_replace_with = [(i,g) for i, g in top_replace_with if i not in self.forbidden_varnames]
         # select top-k
         top_replace_with = top_replace_with[:topk]
             # result = [(i, total_grad[i], self.model.index_to_word[i]) for i in top_replace_with]
@@ -165,7 +170,7 @@ class AdversarialSearcher():
             # words to decrease loss
         # top_replace_with = np.argsort(total_grad)[:topk]
         # TODO: check if len total_grads == len index_to_word -1
-        result = [((original_var, self.indextop_to_word[i]), total_grad[i]) for i in top_replace_with]
+        result = [((original_var, self.indextop_to_word[i]), g) for i, g in top_replace_with]
 
         return result
 
@@ -198,7 +203,8 @@ class AdversarialTargetedSearcher(AdversarialSearcher):
     def _create_states(self, state, model_results, topk):
         loss, all_strings, all_grads = model_results
 
-        res = super()._create_states(state,(loss, all_strings, -all_grads),topk)
+        all_grads[1] = -all_grads[1]
+        res = super()._create_states(state,(loss, all_strings, all_grads),topk)
 
         return res
 
