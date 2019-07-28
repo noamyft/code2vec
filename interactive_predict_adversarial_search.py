@@ -125,8 +125,10 @@ class InteractivePredictorAdversarialBFS(InteractivePredictor):
                     break
 
                 batch_data = [searcher.get_adversarial_code()]
-                loss, all_grads, all_strings = self.model.calc_loss_and_gradients_wrt_input(batch_data, indextop_to_word)
-                if not searcher.next((0, all_strings[0], all_grads[0])):
+                batch_word_to_derive = [searcher.get_word_to_derive()]
+                loss, all_grads = self.model.calc_loss_and_gradients_wrt_input(batch_data, batch_word_to_derive,
+                                                                                            indextop_to_word)
+                if not searcher.next((0, "", all_grads[0])):
                     break
 
             if not results:

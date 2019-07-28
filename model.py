@@ -843,11 +843,11 @@ class Model:
 
             # filter unrelevant var names
             path_source_target_tensor = tf.cond(
-                tf.not_equal(tf.rank(self.eval_source_string), 1),
-                lambda: tf.concat([self.eval_source_string, self.eval_path_target_string], axis=1),
+                tf.not_equal(tf.rank(source_string), 1),
+                lambda: tf.concat([source_string, path_target_string], axis=1),
                 lambda: tf.concat(
-                    [tf.expand_dims(self.eval_source_string, axis=0),
-                     tf.expand_dims(self.eval_path_target_string, axis=0)],
+                    [tf.expand_dims(source_string, axis=0),
+                     tf.expand_dims(path_target_string, axis=0)],
                     axis=1))
 
             # create vocab for adversarial (by given words)
@@ -920,7 +920,9 @@ class Model:
             results.append((original_names[0], top_words[0], top_scores[0], attention_per_path))
         return results
 
-    def calc_loss_and_gradients_wrt_input(self, predict_data_lines, words_to_compute_grad):
+    def calc_loss_and_gradients_wrt_input(self, predict_data_lines, word_to_derive, adversary_words_in_vocab):
+
+        topk_words_from_model = 100
         if self.predict_queue is None:
             self.predict_queue = PathContextReader.PathContextReader(word_to_index=self.word_to_index,
                                                                      path_to_index=self.path_to_index,
@@ -936,29 +938,20 @@ class Model:
             self.load_model(self.sess)
 
         if self.grad_wrt_input is None:
+            self.words_to_compute_grads = tf.placeholder(tf.string, [None])
+
             self.loss_wrt_input, self.grad_wrt_input, self.adversarial_name, self.adversarial_name_index = \
                 self.build_test_graph_with_loss(self.predict_queue.get_filtered_batches(), self.predict_queue,
-                                                words_to_compute_grad)
-
-        source_target_tensor = tf.cond(
-            tf.not_equal(tf.rank(self.predict_source_string), 1),
-            lambda: tf.concat([self.predict_source_string, self.predict_path_target_string], axis=1),
-            lambda: tf.concat(
-                [tf.expand_dims(self.predict_source_string, axis=0),
-                 tf.expand_dims(self.predict_path_target_string, axis=0)],
-                axis=1))
+                                                adversary_words_in_vocab, self.words_to_compute_grads, topk_words_from_model)
 
         # for batch in common.split_to_batches(predict_data_lines, 1):
         batch = predict_data_lines
-        loss_of_input, grad_of_input, source_target_strings = self.sess.run(
+        loss_of_input, grad_of_input = self.sess.run(
             [self.loss_wrt_input,
-             self.grad_wrt_input,
-             source_target_tensor],
-            feed_dict={self.predict_placeholder: batch})
+             self.grad_wrt_input],
+            feed_dict={self.predict_placeholder: batch, self.words_to_compute_grads: word_to_derive})
 
-        source_target_strings = np.array(common.binary_to_string_matrix(source_target_strings))
-
-        return loss_of_input, grad_of_input, source_target_strings
+        return loss_of_input, grad_of_input
 
     def get_words_vocab_embed(self, word = None):
         if word is None:
