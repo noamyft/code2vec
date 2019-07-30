@@ -55,7 +55,8 @@ class BatchPredictorAdversarialBFS(InteractivePredictor):
         for src in input_src:
             print('SAMPLE: ', src)
 
-            with open(src_folder + "/" + src, "r") as f:
+            input_filename = src_folder + "/" + src
+            with open(input_filename, "r") as f:
                 original_code = f.read()
 
             try:
