@@ -56,8 +56,6 @@ class BatchPredictorAdversarialBFS(InteractivePredictor):
             print('SAMPLE: ', src)
 
             input_filename = src_folder + "/" + src
-            with open(input_filename, "r") as f:
-                original_code = f.read()
 
             try:
                 predict_lines, hash_to_string_dict = self.path_extractor.extract_paths(input_filename)
