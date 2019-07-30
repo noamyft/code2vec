@@ -1,14 +1,12 @@
-import traceback
+import timeit
+
+import numpy as np
 
 from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher
 from common import common
-from realextractor import RealExtractor, RealExtractorForAdversarial
-import numpy as np
-import re
 from interactive_predict import InteractivePredictor
-from gensim.models import KeyedVectors as word2vec
+from realextractor import RealExtractorForAdversarial
 
-import timeit
 SHOW_TOP_CONTEXTS = 10
 MAX_PATH_LENGTH = 8
 MAX_PATH_WIDTH = 2
