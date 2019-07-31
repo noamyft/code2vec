@@ -136,10 +136,7 @@ class AdversarialSearcher():
 
         new_nodes = {state: self._create_bfs_node(state, new_level, score) for state, score in new_valid_states}
         self.unchecked_nodes += new_nodes.values()
-        if new_level < self.max_depth:
-            self.open_state_to_node.update(new_nodes)
-        else:
-            self.close_state_to_node.update(new_nodes)
+        self.open_state_to_node.update(new_nodes)
 
 
     def _create_states(self, state, model_results, topk):
