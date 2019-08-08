@@ -397,7 +397,7 @@ class Model:
 
         indextop_to_word = all_words[:top_words]
         word_to_indextop = {w: i for i, w in enumerate(indextop_to_word)}
-        print('Dictionaries by count created.')
+        print('Dictionaries ordered-by count created. (created from: {}.dict.c2v)'.format(data_path))
 
         return word_to_indextop, indextop_to_word
 
