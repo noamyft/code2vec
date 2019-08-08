@@ -43,7 +43,8 @@ class BatchPredictorAdversarialBFS(InteractivePredictor):
         src_folder = "test_adversarial/src"
         input_src = ["contains.java", "count.java", "done.java", "escape.java", "factorial.java", "get.java",
                      "indexOf.java", "isPrime.java", "postRequest.java", "reverseArray.java", "sort.java"]
-        targets = ["nontargeted", "sort", "add", "close", "main", "max", "min", "factorial", "load", "foo",
+        targets = ["sort", "contains", "get", "index|of", "done", "reverse|array", "count", "is|prime",
+                   "post|request", "escape", "add", "close", "main", "max", "min", "factorial", "load", "foo",
                    "update", "bar", "exception", "test", "swap", "predict"]
 
         word_to_indextop, indextop_to_word = self.model.create_ordered_words_dictionary(
