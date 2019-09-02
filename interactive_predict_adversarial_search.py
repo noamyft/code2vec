@@ -74,9 +74,14 @@ class InteractivePredictorAdversarialBFS(InteractivePredictor):
                 for name_prob_pair in method_prediction.predictions:
                     print('\t(%f) predicted: %s' % (name_prob_pair['probability'], name_prob_pair['name']))
 
+            # generate pca
+            self.model.creat_PCA_tokens(predict_lines[0])
+
             # Search for adversarial examples
-            print("select variable to rename:")
+            print("select variable to rename OR -- to skip search:")
             var_to_rename = input()
+            if var_to_rename == "--":
+                continue
 
             while True:
                 print("select attack type: 'nontargeted' for non-targeted attack")
