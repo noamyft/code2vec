@@ -68,6 +68,11 @@ class BatchPredictorAdversarialBFS(InteractivePredictor):
 
             results = self.model.predict([original_code])
             prediction_results = common.parse_results(results, hash_to_string_dict, topk=SHOW_TOP_CONTEXTS)
+            method_prediction = prediction_results[0]
+            if method_prediction.original_name != method_prediction.predictions[0]['name']:
+                print("WRONG PREDICTION. skip. (true: {}, pred: {})".format(method_prediction.original_name,
+                                                                            method_prediction.predictions))
+                continue
             for method_prediction in prediction_results:
                 print('Original name:\t' + method_prediction.original_name)
                 for name_prob_pair in method_prediction.predictions:
