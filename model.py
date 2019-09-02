@@ -12,6 +12,8 @@ from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher
     AdversarialSearcherTrivial, AdversarialTargetedSearcherTrivial
 import codeguard
 from codeguard import guard_by_n2p, guard_by_vunk
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
 import common_adversarial
 import re
 
@@ -266,6 +268,45 @@ class Model:
         # result = [guard_by_pca(r, lambda w: w in self.word_to_index,
         #                        lambda w: self.get_words_vocab_embed(w)) for r in batch]
         return result
+
+    def creat_PCA_tokens(self, code_sample_with_vars):
+        variables, code = common_adversarial.separate_vars_code(code_sample_with_vars)
+        variables = common_adversarial.get_all_vars(variables)
+        tokens = common_adversarial.get_all_tokens(code)
+
+        word_embeddings = self.get_words_vocab_embed()
+        is_word_in_vocab_func = lambda w: w in self.word_to_index
+        get_embed_func = lambda w: word_embeddings[self.word_to_index[w]]
+
+        both = list(set(variables + list(tokens)))
+
+        # both = variables
+
+        exist_tokens = [v for v in both if is_word_in_vocab_func(v)]
+        exist_embed = [get_embed_func(v) for v in exist_tokens]
+
+        pca = PCA(n_components=2)
+        principalComponents = pca.fit_transform(exist_embed)
+
+        # scatter not-variables
+        al = 0.5
+        size = 70
+        for (x, y), name in zip(principalComponents, exist_tokens):
+            if name not in variables:
+                plt.scatter(x, y, label=name, alpha=al, edgecolors='none')
+        # scatter variables
+        al = 1
+        size = 100
+        for (x, y), name in zip(principalComponents, exist_tokens):
+            if name in variables:
+                name = name + " (VAR)"
+                plt.scatter(x, y, label=name, alpha=al, s=size, edgecolors='none')
+
+        plt.title(code.split(" ")[0])
+        plt.legend()
+
+        plt.savefig("pca_of_input.png")
+        plt.clf()
 
     # def evaluate_folder(self):
     #     eval_start_time = time.time()
