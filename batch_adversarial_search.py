@@ -66,8 +66,14 @@ class BatchPredictorAdversarialBFS(InteractivePredictor):
 
             var, original_code = common_adversarial.separate_vars_code(predict_lines[0])
 
+            # ignore methods without vars
+            if not common_adversarial.get_all_vars(var):
+                print("NO VARS. skip.")
+                continue
+
             results = self.model.predict([original_code])
             prediction_results = common.parse_results(results, hash_to_string_dict, topk=SHOW_TOP_CONTEXTS)
+            # skip method that were predicted wrong
             method_prediction = prediction_results[0]
             if method_prediction.original_name != method_prediction.predictions[0]['name']:
                 print("WRONG PREDICTION. skip. (true: {}, pred: {})".format(method_prediction.original_name,
