@@ -75,7 +75,7 @@ class BatchPredictorAdversarialBFS(InteractivePredictor):
             prediction_results = common.parse_results(results, hash_to_string_dict, topk=SHOW_TOP_CONTEXTS)
             # skip method that were predicted wrong
             method_prediction = prediction_results[0]
-            if method_prediction.original_name != method_prediction.predictions[0]['name']:
+            if method_prediction.original_name.lower() != "".join(method_prediction.predictions[0]['name']):
                 print("WRONG PREDICTION. skip. (true: {}, pred: {})".format(method_prediction.original_name,
                                                                             method_prediction.predictions))
                 continue
