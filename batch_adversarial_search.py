@@ -1,6 +1,7 @@
 import timeit
 
 import numpy as np
+import os
 
 from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher
 from common import common
@@ -41,8 +42,9 @@ class BatchPredictorAdversarialBFS(InteractivePredictor):
         # MAX_NODES_TO_OPEN = 10
 
         src_folder = "test_adversarial/src"
-        input_src = ["contains.java", "count.java", "done.java", "escape.java", "factorial.java", "get.java",
-                     "indexOf.java", "isPrime.java", "postRequest.java", "reverseArray.java", "sort.java"]
+        # input_src = ["contains.java", "count.java", "done.java", "escape.java", "factorial.java", "get.java",
+        #              "indexOf.java", "isPrime.java", "postRequest.java", "reverseArray.java", "sort.java"]
+        input_src = os.listdir(src_folder)
         targets = ["sort", "contains", "get", "index|of", "done", "reverse|array", "count", "is|prime",
                    "post|request", "escape", "add", "close", "main", "max", "min", "factorial", "load", "foo",
                    "update", "bar", "exception", "test", "swap", "predict"]
