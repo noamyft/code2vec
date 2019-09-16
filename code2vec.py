@@ -1,5 +1,6 @@
 import pickle
 
+from batch_adversarial_search import BatchPredictorAdversarialBFS
 from common import Config, VocabType
 from argparse import ArgumentParser
 from interactive_predict import InteractivePredictor
@@ -94,9 +95,10 @@ if __name__ == '__main__':
             predictor = InteractivePredictor(config, model)
         else:
             predictor = InteractivePredictorAdversarialBFS(config, model,
+            # predictor = BatchPredictorAdversarialBFS(config, model,
                                                            int(args.adversarial_topk),
                                                            int(args.adversarial_depth),
-                                                           args.guard_input, True)
+                                                           args.guard_input, False)
         # automatic search for something
         # predictor = InteractivePredictorAdvMonoSearch(config, model)
         # automatic search similar name
