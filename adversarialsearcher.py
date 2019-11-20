@@ -313,3 +313,65 @@ class AdversarialTargetedSearcherTrivial(AdversarialTargetedSearcher):
         self.open_state_to_node.clear()
 
         return True
+
+##################################################
+#   TDIDF adversary
+##################################################
+def load_tfidf_dict():
+    import pickle
+    url = "data/java-large/tfidf_dict_java_large.pkl"
+    print("opening tfidf_dict from:", url)
+    with open(url, 'rb') as file:
+        d = pickle.load(file)
+
+    return d
+
+class AdversarialSearcherTfidf(AdversarialSearcherTrivial):
+    tfidf_dict = None
+
+    def __init__(self, topk, max_depth, word_to_indextop, indextop_to_word, code,
+                 initial_state_generator=None):
+        super().__init__(topk,max_depth, word_to_indextop, indextop_to_word,code,initial_state_generator)
+        if AdversarialSearcherTfidf.tfidf_dict is None:
+            AdversarialSearcherTfidf.tfidf_dict = load_tfidf_dict()
+
+    def _create_states(self, state, model_results, topk):
+        original_var, new_var = state
+
+        replace_with = []
+        for method_name, vars_list in AdversarialSearcherTfidf.tfidf_dict.items():
+            if method_name == self.original_name:
+                continue
+            replace_with += vars_list
+            if len(replace_with) > self.num_of_trials:
+                break
+
+        self.random_candidates = replace_with[:self.num_of_trials]
+
+        result = [((original_var, v.lower()), 0) for v in self.random_candidates]
+
+        return result
+
+class AdversarialTargetedSearcherTfidf(AdversarialTargetedSearcherTrivial):
+    tfidf_dict = None
+
+    def __init__(self, topk, max_depth, word_to_indextop, indextop_to_word, code, new_target,
+                 initial_state_generator=None):
+        super().__init__(topk, max_depth, word_to_indextop, indextop_to_word, code, new_target,
+                         initial_state_generator)
+        self.num_of_trials = int(topk ** (max_depth + 1) / (topk - 1) - 2)
+        if AdversarialSearcherTfidf.tfidf_dict is None:
+            AdversarialSearcherTfidf.tfidf_dict = load_tfidf_dict()
+
+    def _create_states(self, state, model_results, topk):
+        original_var, new_var = state
+
+        if self.new_target not in AdversarialSearcherTfidf.tfidf_dict:
+            self.random_candidates = [self.new_target.replace("|","")]
+        else:
+            replace_with = AdversarialSearcherTfidf.tfidf_dict[self.new_target]
+            self.random_candidates = replace_with[:self.num_of_trials]
+
+        result = [((original_var, v.lower()), 0) for v in self.random_candidates]
+
+        return result

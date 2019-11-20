@@ -9,7 +9,8 @@ import random
 from common import common, VocabType
 import adversarialsearcher
 from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher, \
-    AdversarialSearcherTrivial, AdversarialTargetedSearcherTrivial
+    AdversarialSearcherTrivial, AdversarialTargetedSearcherTrivial, \
+    AdversarialSearcherTfidf, AdversarialTargetedSearcherTfidf
 import codeguard
 from codeguard import guard_by_n2p, guard_by_vunk
 from sklearn.decomposition import PCA
