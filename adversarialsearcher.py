@@ -262,7 +262,7 @@ class AdversarialSearcherTrivial(AdversarialSearcher):
     def _create_states(self, state, model_results, topk):
         original_var, new_var = state
 
-        all_name = np.array(list(self.indextop_to_word.keys()))
+        all_name = np.array(list(range(len(self.indextop_to_word))))
         # filter forbidden words
         replace_with = all_name[~np.isin(all_name, self.forbidden_varnames)]
 
