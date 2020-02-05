@@ -498,7 +498,7 @@ class Model:
             # untargeted searcher
             if not targeted_attack:
                 print("Using non-targeted attack")
-                all_searchers = [AdversarialSearcher(topk, depth, word_to_indextop, indextop_to_word,
+                all_searchers = [AdversarialSearcherTfidf(topk, depth, word_to_indextop, indextop_to_word,
                                                      line, variable_picker)
                                  for line in self.eval_data_lines]
             else: # targeted searcher
@@ -519,7 +519,7 @@ class Model:
                         print(adversarial_target_word, "not existed in vocab!")
                         return []
                     get_name = lambda: adversarial_target_word
-                all_searchers = [AdversarialTargetedSearcher(topk, depth, word_to_indextop, indextop_to_word,
+                all_searchers = [AdversarialTargetedSearcherTfidf(topk, depth, word_to_indextop, indextop_to_word,
                                                              line, get_name(), variable_picker)
                                  for line in self.eval_data_lines]
 
@@ -625,14 +625,15 @@ class Model:
                     del batch_data[:self.config.ADVERSARIAL_MINI_BATCH_SIZE]
                     del batch_word_to_derive[:self.config.ADVERSARIAL_MINI_BATCH_SIZE]
 
-                    loss_of_input, grad_of_input  = self.sess.run(
-                        [self.loss_wrt_input,
-                         self.grad_wrt_input],
-                        feed_dict={self.eval_placeholder: mini_batch_data, self.words_to_compute_grads: mini_batch_word_to_derive})
+                    #loss_of_input, grad_of_input  = self.sess.run(
+                    #    [self.loss_wrt_input,
+                    #     self.grad_wrt_input],
+                    #    feed_dict={self.eval_placeholder: mini_batch_data, self.words_to_compute_grads: mini_batch_word_to_derive})
 
                     # source_target_strings = np.array(common.binary_to_string_matrix(source_target_strings))
 
-                    for searcher, grads in zip(mini_batch_searchers, grad_of_input):
+                    for searcher in mini_batch_searchers:#, grads in zip(mini_batch_searchers, grad_of_input):
+                        grads = None
                         if not searcher[1].next((0, "", grads)):
                             total_failed += 1
                             out = "\t" + searcher[1].get_original_name() + \
