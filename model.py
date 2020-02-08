@@ -893,9 +893,8 @@ class Model:
                     axis=1))
 
             # create vocab for adversarial (by given words)
-            # grad_word_embed = tf.reshape(grad_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
-            adversary_word_embeddings = [tf.reshape(words_vocab[self.word_to_index[w]], (1, -1)) for w in adversary_words_in_vocab]
-            partial_words_vocab = tf.concat(adversary_word_embeddings, axis=0)
+            ##deprecated: grad_word_embed = tf.reshape(grad_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
+            partial_words_vocab = tf.gather(words_vocab, [self.word_to_index[w] for w in adversary_words_in_vocab])
 
             # filter only given vars
             mask = tf.equal(words_to_compute_grads, path_source_target_tensor)
