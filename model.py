@@ -446,6 +446,9 @@ class Model:
     def evaluate_and_adverse(self, depth, topk, targeted_attack, adversarial_target_word,
                              deadcode_attack, guard_input = None, adverse_TP_only = True):
 
+        # create adversarial data file
+        adversarial_data_file = open("adversarial_data_file.c2v","w")
+
         topk_words_from_model = 100
         word_to_indextop, indextop_to_word  = self.create_ordered_words_dictionary(
             Model.get_data_dictionaries_path(self.config.LOAD_PATH),
@@ -569,7 +572,7 @@ class Model:
 
                 new_batch_searchers = []
                 searcher_done = {}
-                for (searcher, node, _), one_top_words in zip(batch_nodes_data, top_words):
+                for (searcher, node, code_example), one_top_words in zip(batch_nodes_data, top_words):
                     # if already found - skip
                     if searcher[1] in searcher_done:
                         continue
@@ -595,7 +598,9 @@ class Model:
                         else:
                             trivial += 1
 
-                        searcher_done[searcher[1]] = None
+                        #TODO: disable search done, print example to file
+                        adversarial_data_file.write(code_example + "\n")
+                        #searcher_done[searcher[1]] = None
 
                         out = "\t" + searcher[1].get_original_name() +\
                               "\t" + searcher[0] +\
@@ -603,7 +608,8 @@ class Model:
                               "\t" + str(node)
 
                         output_file.write(out + "\n")
-                        continue
+                        #TODO: disable continue
+                        #continue
 
                     if searcher not in new_batch_searchers:
                         new_batch_searchers.append(searcher)
@@ -666,6 +672,8 @@ class Model:
 
         elapsed = int(time.time() - eval_start_time)
         print("Evaluation time: %sH:%sM:%sS" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
+
+        adversarial_data_file.close()
         return results
 
     def update_per_subtoken_statistics(self, results, true_positive, false_positive, false_negative):
