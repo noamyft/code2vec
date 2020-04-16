@@ -23,7 +23,7 @@ class Config:
         config.MAX_TO_KEEP = 10
 
         # Hyper-parameters for adversarial search
-        config.MAX_WORDS_FROM_VOCAB_FOR_ADVERSARIAL = 10000
+        config.MAX_WORDS_FROM_VOCAB_FOR_ADVERSARIAL = 100000
         config.ADVERSARIAL_MINI_BATCH_SIZE = 256
 
         # Automatically filled, do not edit:
