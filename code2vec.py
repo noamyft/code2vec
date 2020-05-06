@@ -59,7 +59,10 @@ if __name__ == '__main__':
     model = Model(config)
     print('Created model')
     if config.TRAIN_PATH:
-        model.train()
+        if not args.test_adversarial:
+            model.train()
+        else:
+            model.adversarial_training()
     if args.save_w2v is not None:
         model.save_word2vec_format(args.save_w2v, source=VocabType.Token)
         print('Origin word vectors saved in word2vec text format in: %s' % args.save_w2v)

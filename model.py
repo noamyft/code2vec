@@ -1,3 +1,5 @@
+from itertools import islice
+
 import tensorflow as tf
 from concurrent.futures import ThreadPoolExecutor
 
@@ -205,23 +207,23 @@ class Model:
                     zip(original_names, top_words),
                     true_positive, false_positive, false_negative)
 
-                for l, original, predicted in zip(original_batch, original_names, top_words):
-                    v, c = common_adversarial.separate_vars_code(l)
-                    v = common_adversarial.get_all_vars(v)
-                    t = common_adversarial.get_all_tokens(c)
-                    t.update(v)
-                    # ratio = round(100*len(v)/len(t), 2)
-                    ratio = len(v)
-                    if ratio not in measure_by_percentage:
-                        measure_by_percentage[ratio] = {"TP":0, "FP":0, "FN":0, "CNT": 0}
-                    measure_by_percentage[ratio]["TP"], \
-                    measure_by_percentage[ratio]["FP"], \
-                    measure_by_percentage[ratio]["FN"] = self.update_per_subtoken_statistics(
-                        [(original, predicted)],
-                        measure_by_percentage[ratio]["TP"],
-                        measure_by_percentage[ratio]["FP"],
-                        measure_by_percentage[ratio]["FN"])
-                    measure_by_percentage[ratio]["CNT"] += 1
+                # for l, original, predicted in zip(original_batch, original_names, top_words):
+                #     v, c = common_adversarial.separate_vars_code(l)
+                #     v = common_adversarial.get_all_vars(v)
+                #     t = common_adversarial.get_all_tokens(c)
+                #     t.update(v)
+                #     # ratio = round(100*len(v)/len(t), 2)
+                #     ratio = len(v)
+                #     if ratio not in measure_by_percentage:
+                #         measure_by_percentage[ratio] = {"TP":0, "FP":0, "FN":0, "CNT": 0}
+                #     measure_by_percentage[ratio]["TP"], \
+                #     measure_by_percentage[ratio]["FP"], \
+                #     measure_by_percentage[ratio]["FN"] = self.update_per_subtoken_statistics(
+                #         [(original, predicted)],
+                #         measure_by_percentage[ratio]["TP"],
+                #         measure_by_percentage[ratio]["FP"],
+                #         measure_by_percentage[ratio]["FN"])
+                #     measure_by_percentage[ratio]["CNT"] += 1
 
                 total_predictions += len(original_names)
                 total_prediction_batches += 1
@@ -233,11 +235,11 @@ class Model:
             print('Done testing, epoch reached')
             output_file.write(str(num_correct_predictions / total_predictions) + '\n')
 
-        precision_var_above0, recall_var_above0, f1_var_above0 = \
-            self.calculate_results(true_positive - measure_by_percentage[0]["TP"],
-                                   false_positive - measure_by_percentage[0]["FP"],
-                                   false_negative - measure_by_percentage[0]["FN"])
-        print('Measurement for var count above 0:: Precision: ' + str(precision_var_above0) + ', recall: ' + str(recall_var_above0) + ', F1: ' + str(f1_var_above0))
+        # precision_var_above0, recall_var_above0, f1_var_above0 = \
+        #     self.calculate_results(true_positive - measure_by_percentage[0]["TP"],
+        #                            false_positive - measure_by_percentage[0]["FP"],
+        #                            false_negative - measure_by_percentage[0]["FN"])
+        # print('Measurement for var count above 0:: Precision: ' + str(precision_var_above0) + ', recall: ' + str(recall_var_above0) + ', F1: ' + str(f1_var_above0))
         elapsed = int(time.time() - eval_start_time)
         precision, recall, f1 = self.calculate_results(true_positive, false_positive, false_negative)
         print("Evaluation time: %sH:%sM:%sS" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
@@ -248,6 +250,113 @@ class Model:
             pickle.dump(measure_by_percentage, f)
 
         return num_correct_predictions / total_predictions, precision, recall, f1
+
+    def adversarial_training(self):
+        topk_words_from_model = 100
+        word_to_indextop, indextop_to_word  = self.create_ordered_words_dictionary(
+            self.config.TRAIN_PATH,
+            self.config.MAX_WORDS_FROM_VOCAB_FOR_ADVERSARIAL)
+
+        print('Starting adversarial training')
+        start_time = time.time()
+
+        batch_num = 0
+        sum_loss = 0
+        multi_batch_start_time = time.time()
+        num_batches_to_evaluate = max(int(
+            self.config.NUM_EXAMPLES / self.config.BATCH_SIZE * self.config.SAVE_EVERY_EPOCHS), 1)
+
+        self.adversarial_training_queue_thread = PathContextReader.PathContextReader(word_to_index=self.word_to_index,
+                                                                  path_to_index=self.path_to_index,
+                                                                  target_word_to_index=self.target_word_to_index,
+                                                                  config=self.config, is_evaluating=True)
+        self.adversarial_training_placeholder = self.adversarial_training_queue_thread.get_input_placeholder()
+
+        # create test graph
+        self.eval_placeholder = self.adversarial_training_placeholder
+        # self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op, _, \
+        # self.eval_source_string, _, self.eval_path_target_string = \
+        #     self.build_test_graph(self.adversarial_training_queue_thread.get_filtered_batches())
+
+        # create adversarial training graph
+        self.words_to_compute_grads = tf.placeholder(tf.string, [None])
+
+        self.loss_wrt_input, self.grad_wrt_input, self.adversarial_name, self.adversarial_name_index, \
+        adversarial_optimizer, adversarial_optimizer_train_loss = \
+            self.build_adversarial_training_graph_with_loss(self.adversarial_training_queue_thread.get_filtered_batches(),
+                                      self.adversarial_training_queue_thread,
+                                            indextop_to_word, self.words_to_compute_grads, topk_words_from_model)
+
+
+        self.saver = tf.train.Saver(max_to_keep=self.config.MAX_TO_KEEP)
+
+        self.initialize_session_variables(self.sess)
+
+        print('Initalized variables')
+        if self.config.LOAD_PATH:
+            self.load_model(self.sess)
+
+        path = self.config.TRAIN_PATH + '.train.c2v'
+        epoch = 0
+        while True:
+            epoch += 1
+            print("EPOCH:", epoch)
+            with open(path, 'r') as f:
+                for batch_lines in iter(lambda: tuple(islice(f, self.config.BATCH_SIZE)), ()):
+
+                    batch_lines = [l.rstrip('\n') for l in batch_lines]
+                    batch_num += 1
+
+                    # regular training
+                    batch_data = [common_adversarial.separate_vars_code(l)[1] for l in batch_lines]
+                    _, batch_loss = self.sess.run([adversarial_optimizer, adversarial_optimizer_train_loss],
+                                                  feed_dict={self.eval_placeholder: batch_data})
+                    sum_loss += batch_loss
+
+                    # adversarial training
+                    batch_searchers = [AdversarialSearcher(1, 1, word_to_indextop, indextop_to_word,
+                                                           line, None)
+                                       for line in batch_lines]
+                    batch_searchers = [se for se in batch_searchers if se.can_be_adversarial()]
+                    [se.pop_unchecked_adversarial_code() for se in batch_searchers]
+
+                    batch_data = [se.get_adversarial_code() for se in batch_searchers]
+                    batch_word_to_derive = [se.get_word_to_derive() for se in batch_searchers]
+                    loss_of_input, grad_of_input = self.sess.run([self.loss_wrt_input,self.grad_wrt_input],
+                        feed_dict={self.eval_placeholder: batch_data, self.words_to_compute_grads: batch_word_to_derive})
+                    for searcher, grads in zip(batch_searchers, grad_of_input):
+                        searcher.next((0, "", grads))
+
+                    batch_data = [c for se in batch_searchers
+                                  for _, c in se.pop_unchecked_adversarial_code()]
+                    _, batch_loss = self.sess.run([adversarial_optimizer, adversarial_optimizer_train_loss],
+                                                  feed_dict={self.eval_placeholder: batch_data})
+                    sum_loss += batch_loss
+
+                    # logging
+                    if batch_num % self.num_batches_to_log == 0:
+                        self.trace(sum_loss, batch_num, multi_batch_start_time)
+                        print('batch num: %d/%d'.format(batch_num, num_batches_to_evaluate))
+                        # print('Number of waiting examples in queue: %d' % self.sess.run(
+                        #     "shuffle_batch/random_shuffle_queue_Size:0"))
+                        sum_loss = 0
+                        multi_batch_start_time = time.time()
+                    if batch_num % num_batches_to_evaluate == 0:
+                        epoch_num = int((batch_num / num_batches_to_evaluate) * self.config.SAVE_EVERY_EPOCHS)
+                        save_target = self.config.SAVE_PATH + '_iter' + str(epoch_num)
+                        self.save_model(self.sess, save_target)
+                        print('Saved after %d epochs in: %s' % (epoch_num, save_target))
+                        results, precision, recall, f1 = self.evaluate()
+                        print('Accuracy after %d epochs: %s' % (epoch_num, results[:5]))
+                        print('After ' + str(epoch_num) + ' epochs: Precision: ' + str(precision) + ', recall: ' + str(
+                            recall) + ', F1: ' + str(f1))
+
+        if self.config.SAVE_PATH:
+            self.save_model(self.sess, self.config.SAVE_PATH)
+            print('Model saved in file: %s' % self.config.SAVE_PATH)
+
+        elapsed = int(time.time() - start_time)
+        print("Training time: %sH:%sM:%sS\n" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
 
     def guard_code_batch(self, batch, word_embeddings, threshold=0):
         # with ThreadPoolExecutor(max_workers=13) as executor:
@@ -752,6 +861,95 @@ class Model:
             optimizer = tf.train.AdamOptimizer().minimize(loss)
 
         return optimizer, loss
+
+    def build_adversarial_training_graph_with_loss(self, input_tensors, queue,
+                                                        adversary_words_in_vocab, words_to_compute_grads,
+                                                        topk_results = None):
+        words_to_compute_grads = tf.reshape(words_to_compute_grads, [-1, 1])
+        with tf.variable_scope('model', reuse=False):
+
+            words_vocab = tf.get_variable('WORDS_VOCAB', shape=(self.word_vocab_size + 1, self.config.EMBEDDINGS_SIZE),
+                                          dtype=tf.float32, trainable=False)
+            target_words_vocab = tf.get_variable('TARGET_WORDS_VOCAB',
+                                                 shape=(
+                                                     self.target_word_vocab_size + 1, self.config.EMBEDDINGS_SIZE * 3),
+                                                 dtype=tf.float32, trainable=False)
+            attention_param = tf.get_variable('ATTENTION',
+                                              shape=(self.config.EMBEDDINGS_SIZE * 3, 1),
+                                              dtype=tf.float32, trainable=False)
+            paths_vocab = tf.get_variable('PATHS_VOCAB',
+                                          shape=(self.path_vocab_size + 1, self.config.EMBEDDINGS_SIZE),
+                                          dtype=tf.float32, trainable=False)
+
+            # target_words_vocab = tf.transpose(target_words_vocab)  # (dim, word_vocab+1)
+
+            words_input, source_input, path_input, target_input, valid_mask, source_string, path_string, path_target_string = input_tensors  # (batch, 1), (batch, max_contexts)
+
+            weighted_average_contexts, attention_weights, source_word_embed, target_word_embed = \
+                self.calculate_weighted_contexts(words_vocab, paths_vocab,
+                        attention_param,
+                        source_input, path_input,
+                        target_input,
+                        valid_mask, True, return_embed=True)
+
+            logits = tf.matmul(weighted_average_contexts, target_words_vocab, transpose_b=True)
+
+            words_input_index = queue.target_word_table.lookup(words_input)
+
+            #PART 1: build training computation graph
+            batch_size = tf.to_float(tf.shape(words_input)[0])
+            train_loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(
+                labels=tf.reshape(words_input_index, [-1]),
+                logits=logits)) / batch_size
+
+            train_optimizer = tf.train.AdamOptimizer().minimize(train_loss)
+
+            # PART 2: build adversarial computation graph (same graph as the graph for adversary (for grads computation))
+
+            original_words = words_input
+            original_words_index = words_input_index
+            adversary_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                labels=tf.reshape(words_input_index, [-1]),
+                logits=logits)
+
+            grad = tf.gradients([adversary_loss], [source_word_embed, target_word_embed])
+            grad_source_word_embed, grad_target_word_embed = grad
+            grad_word_embed = tf.concat([grad_source_word_embed, grad_target_word_embed], axis=1)
+
+            # filter unrelevant var names
+            path_source_target_tensor = tf.cond(
+                tf.not_equal(tf.rank(source_string), 1),
+                lambda: tf.concat([source_string, path_target_string], axis=1),
+                lambda: tf.concat(
+                    [tf.expand_dims(source_string, axis=0),
+                     tf.expand_dims(path_target_string, axis=0)],
+                    axis=1))
+
+            # create vocab for adversarial (by given words)
+            partial_words_vocab = tf.gather(words_vocab, [self.word_to_index[w] for w in adversary_words_in_vocab])
+
+            # filter only given vars
+            mask = tf.equal(words_to_compute_grads, path_source_target_tensor)
+            grad_word_embed = tf.reduce_sum(tf.multiply(grad_word_embed, tf.expand_dims(tf.cast(mask, tf.float32), -1)),
+                                            axis=1)
+
+            grad_of_input = tf.matmul(grad_word_embed, partial_words_vocab, transpose_b=True)
+
+            # grad_of_input = tf.contrib.eager.py_func(my_py_func,
+            #                                          [grad_word_embed, path_source_target_tensor, words_to_compute_grads, partial_words_vocab],
+            #                                          tf.float32)
+
+            if topk_results is None:
+                batched_grad_of_source_input = grad_of_input
+            else:
+                top_values, top_indices  = tf.math.top_k(grad_of_input, k=topk_results)
+                bottom_values, bottom_indices = tf.math.top_k(-grad_of_input, k=topk_results)
+                values = tf.concat([top_values, -bottom_values], axis=-1)
+                indices = tf.concat([top_indices, bottom_indices], axis=-1)
+                batched_grad_of_source_input = tf.stack([tf.cast(indices, tf.float32), values], axis=1)
+
+        return adversary_loss, batched_grad_of_source_input, original_words, original_words_index, \
+               train_optimizer, train_loss
 
     def calculate_weighted_contexts(self, words_vocab, paths_vocab, attention_param, source_input, path_input,
                                     target_input, valid_mask, is_evaluating=False, return_embed = False):
