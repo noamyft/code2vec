@@ -318,25 +318,27 @@ class Model:
                                                            line, None)
                                        for line in batch_lines]
                     batch_searchers = [se for se in batch_searchers if se.can_be_adversarial()]
-                    [se.pop_unchecked_adversarial_code() for se in batch_searchers]
 
-                    batch_data = [se.get_adversarial_code() for se in batch_searchers]
-                    batch_word_to_derive = [se.get_word_to_derive() for se in batch_searchers]
-                    loss_of_input, grad_of_input = self.sess.run([self.loss_wrt_input,self.grad_wrt_input],
-                        feed_dict={self.eval_placeholder: batch_data, self.words_to_compute_grads: batch_word_to_derive})
-                    for searcher, grads in zip(batch_searchers, grad_of_input):
-                        searcher.next((0, "", grads))
+                    if batch_searchers:
+                        [se.pop_unchecked_adversarial_code() for se in batch_searchers]
 
-                    batch_data = [c for se in batch_searchers
-                                  for _, c in se.pop_unchecked_adversarial_code()]
-                    _, batch_loss = self.sess.run([adversarial_optimizer, adversarial_optimizer_train_loss],
-                                                  feed_dict={self.eval_placeholder: batch_data})
-                    sum_loss += batch_loss
+                        batch_data = [se.get_adversarial_code() for se in batch_searchers]
+                        batch_word_to_derive = [se.get_word_to_derive() for se in batch_searchers]
+                        loss_of_input, grad_of_input = self.sess.run([self.loss_wrt_input,self.grad_wrt_input],
+                            feed_dict={self.eval_placeholder: batch_data, self.words_to_compute_grads: batch_word_to_derive})
+                        for searcher, grads in zip(batch_searchers, grad_of_input):
+                            searcher.next((0, "", grads))
+
+                        batch_data = [c for se in batch_searchers
+                                      for _, c in se.pop_unchecked_adversarial_code()]
+                        _, batch_loss = self.sess.run([adversarial_optimizer, adversarial_optimizer_train_loss],
+                                                      feed_dict={self.eval_placeholder: batch_data})
+                        sum_loss += batch_loss
 
                     # logging
                     if batch_num % self.num_batches_to_log == 0:
                         self.trace(sum_loss, batch_num, multi_batch_start_time)
-                        print('batch num: %d/%d'.format(batch_num, num_batches_to_evaluate))
+                        print('batch num: {}/{}'.format(batch_num, num_batches_to_evaluate))
                         # print('Number of waiting examples in queue: %d' % self.sess.run(
                         #     "shuffle_batch/random_shuffle_queue_Size:0"))
                         sum_loss = 0
