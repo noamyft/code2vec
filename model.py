@@ -868,7 +868,7 @@ class Model:
                                                         adversary_words_in_vocab, words_to_compute_grads,
                                                         topk_results = None):
         words_to_compute_grads = tf.reshape(words_to_compute_grads, [-1, 1])
-        with tf.variable_scope('model', reuse=False):
+        with tf.variable_scope('model'):
             words_vocab = tf.get_variable('WORDS_VOCAB', shape=(self.word_vocab_size + 1, self.config.EMBEDDINGS_SIZE),
                                           dtype=tf.float32,
                                           initializer=tf.contrib.layers.variance_scaling_initializer(factor=1.0,
@@ -893,6 +893,22 @@ class Model:
 
             words_input, source_input, path_input, target_input, valid_mask, source_string, path_string, path_target_string = input_tensors  # (batch, 1), (batch, max_contexts)
 
+            words_input_index = queue.target_word_table.lookup(words_input)
+
+            ### PART 1: build training computation graph
+            weighted_average_contexts, _ = self.calculate_weighted_contexts(words_vocab, paths_vocab, attention_param,
+                                                                            source_input, path_input, target_input,
+                                                                            valid_mask)
+            logits = tf.matmul(weighted_average_contexts, target_words_vocab, transpose_b=True)
+
+            batch_size = tf.to_float(tf.shape(words_input)[0])
+            train_loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(
+                labels=tf.reshape(words_input_index, [-1]),
+                logits=logits)) / batch_size
+
+            train_optimizer = tf.train.AdamOptimizer().minimize(train_loss)
+
+            ### PART 2: build adversarial computation graph (same graph as the graph for adversary (for grads computation))
             weighted_average_contexts, attention_weights, source_word_embed, target_word_embed = \
                 self.calculate_weighted_contexts(words_vocab, paths_vocab,
                         attention_param,
@@ -901,18 +917,6 @@ class Model:
                         valid_mask, True, return_embed=True)
 
             logits = tf.matmul(weighted_average_contexts, target_words_vocab, transpose_b=True)
-
-            words_input_index = queue.target_word_table.lookup(words_input)
-
-            #PART 1: build training computation graph
-            batch_size = tf.to_float(tf.shape(words_input)[0])
-            train_loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(
-                labels=tf.reshape(words_input_index, [-1]),
-                logits=logits)) / batch_size
-
-            train_optimizer = tf.train.AdamOptimizer().minimize(train_loss)
-
-            # PART 2: build adversarial computation graph (same graph as the graph for adversary (for grads computation))
 
             original_words = words_input
             original_words_index = words_input_index
@@ -974,9 +978,10 @@ class Model:
             context_embed = tf.nn.dropout(context_embed, keep_prob1)
 
         flat_embed = tf.reshape(context_embed, [-1, self.config.EMBEDDINGS_SIZE * 3])  # (batch * max_contexts, dim * 3)
-        transform_param = tf.get_variable('TRANSFORM',
-                                          shape=(self.config.EMBEDDINGS_SIZE * 3, self.config.EMBEDDINGS_SIZE * 3),
-                                          dtype=tf.float32)
+        with tf.variable_scope('model', reuse=tf.AUTO_REUSE):
+            transform_param = tf.get_variable('TRANSFORM',
+                                              shape=(self.config.EMBEDDINGS_SIZE * 3, self.config.EMBEDDINGS_SIZE * 3),
+                                              dtype=tf.float32)
 
         flat_embed = tf.tanh(tf.matmul(flat_embed, transform_param))  # (batch * max_contexts, dim * 3)
 
