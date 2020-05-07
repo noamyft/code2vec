@@ -869,19 +869,25 @@ class Model:
                                                         topk_results = None):
         words_to_compute_grads = tf.reshape(words_to_compute_grads, [-1, 1])
         with tf.variable_scope('model', reuse=False):
-
             words_vocab = tf.get_variable('WORDS_VOCAB', shape=(self.word_vocab_size + 1, self.config.EMBEDDINGS_SIZE),
-                                          dtype=tf.float32, trainable=False)
+                                          dtype=tf.float32,
+                                          initializer=tf.contrib.layers.variance_scaling_initializer(factor=1.0,
+                                                                                                     mode='FAN_OUT',
+                                                                                                     uniform=True))
             target_words_vocab = tf.get_variable('TARGET_WORDS_VOCAB',
                                                  shape=(
                                                      self.target_word_vocab_size + 1, self.config.EMBEDDINGS_SIZE * 3),
-                                                 dtype=tf.float32, trainable=False)
+                                                 dtype=tf.float32,
+                                                 initializer=tf.contrib.layers.variance_scaling_initializer(factor=1.0,
+                                                                                                            mode='FAN_OUT',
+                                                                                                            uniform=True))
             attention_param = tf.get_variable('ATTENTION',
-                                              shape=(self.config.EMBEDDINGS_SIZE * 3, 1),
-                                              dtype=tf.float32, trainable=False)
-            paths_vocab = tf.get_variable('PATHS_VOCAB',
-                                          shape=(self.path_vocab_size + 1, self.config.EMBEDDINGS_SIZE),
-                                          dtype=tf.float32, trainable=False)
+                                              shape=(self.config.EMBEDDINGS_SIZE * 3, 1), dtype=tf.float32)
+            paths_vocab = tf.get_variable('PATHS_VOCAB', shape=(self.path_vocab_size + 1, self.config.EMBEDDINGS_SIZE),
+                                          dtype=tf.float32,
+                                          initializer=tf.contrib.layers.variance_scaling_initializer(factor=1.0,
+                                                                                                     mode='FAN_OUT',
+                                                                                                     uniform=True))
 
             # target_words_vocab = tf.transpose(target_words_vocab)  # (dim, word_vocab+1)
 
