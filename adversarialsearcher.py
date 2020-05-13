@@ -1,5 +1,6 @@
 import numpy as np
 import random
+import common_adversarial
 
 # def overrideVariables(newVarList, code):
 #     var_code_split_index = code.find(" ")
@@ -11,10 +12,31 @@ def init_deadcode_variable(code, variables):
 class AdversarialSearcher():
 
     def __init__(self, topk, max_depth, word_to_indextop, indextop_to_word, code,
-                 initial_state_generator=None):
+                 initial_state_generator=None, random_start=False):
+
         self.topk = topk
         self.max_depth = max_depth
         self.word_to_indextop, self.indextop_to_word = word_to_indextop, indextop_to_word
+
+        if initial_state_generator == None:
+            initial_state_generator = self._get_init_state
+
+        if random_start:
+            variables, c = common_adversarial.separate_vars_code(code)
+            if variables != "":
+                variables = common_adversarial.get_all_vars(variables)
+                t = common_adversarial.get_all_tokens(c)
+                s = initial_state_generator(c, variables)
+                for new_var in random.sample(indextop_to_word, 100):
+                    if new_var not in t:
+                        original_var = s[0][0]
+                        # replace to new var
+                        new_code = c.replace(" " + original_var + ",", " " + new_var + ",") \
+                            .replace("," + original_var + " ", "," + new_var + " ")
+                        return_vars = [v for v in variables if v != original_var] + [new_var]
+                        code = ",".join(return_vars) + " " + new_code
+                        initial_state_generator = lambda c, v: [(new_var, new_var)]
+                        break
 
         # process data line - get vars
         var_code_split_index = code.find(" ")
@@ -42,9 +64,6 @@ class AdversarialSearcher():
             self.open_state_to_node = {}
             self.close_state_to_node = {}
             self.unchecked_nodes = []
-
-            if initial_state_generator == None:
-                initial_state_generator = self._get_init_state
 
             init_states = [(s, 0) for s in initial_state_generator(self.original_code, self.vars)]
             self._update_open(init_states, 0)
@@ -180,7 +199,7 @@ class AdversarialSearcher():
 class AdversarialTargetedSearcher(AdversarialSearcher):
 
     def __init__(self, topk, max_depth, word_to_indextop, indextop_to_word, code, new_target,
-                 initial_state_generator=None):
+                 initial_state_generator=None, random_start=False):
         self.new_target = new_target
         # replace original name with targeted name
         start_original_name = code.find(" ") + 1
@@ -189,7 +208,7 @@ class AdversarialTargetedSearcher(AdversarialSearcher):
         code = code[:start_original_name] + self.new_target + code[end_original_name:]
 
         super().__init__(topk, max_depth, word_to_indextop, indextop_to_word, code,
-                         initial_state_generator=initial_state_generator)
+                         initial_state_generator=initial_state_generator, random_start=random_start)
         self.original_name = true_target
 
 

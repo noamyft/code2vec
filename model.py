@@ -610,7 +610,7 @@ class Model:
             if not targeted_attack:
                 print("Using non-targeted attack")
                 all_searchers = [AdversarialSearcher(topk, depth, word_to_indextop, indextop_to_word,
-                                                     line, variable_picker)
+                                                     line, variable_picker, random_start=True)
                                  for line in self.eval_data_lines]
             else: # targeted searcher
                 if adversarial_target_word == "random-uniform":
@@ -631,7 +631,7 @@ class Model:
                         return []
                     get_name = lambda: adversarial_target_word
                 all_searchers = [AdversarialTargetedSearcher(topk, depth, word_to_indextop, indextop_to_word,
-                                                             line, get_name(), variable_picker)
+                                                             line, get_name(), variable_picker, random_start=True)
                                  for line in self.eval_data_lines]
 
             all_searchers = [[None, se] for se in all_searchers if se.can_be_adversarial()]
