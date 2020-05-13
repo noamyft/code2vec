@@ -273,7 +273,7 @@ class Model:
         self.adversarial_training_placeholder = self.adversarial_training_queue_thread.get_input_placeholder()
 
         # create test graph
-        self.eval_placeholder = self.adversarial_training_placeholder
+        self.train_placeholder = self.adversarial_training_placeholder
         # self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op, _, \
         # self.eval_source_string, _, self.eval_path_target_string = \
         #     self.build_test_graph(self.adversarial_training_queue_thread.get_filtered_batches())
@@ -310,7 +310,7 @@ class Model:
                     # regular training
                     batch_data = [common_adversarial.separate_vars_code(l)[1] for l in batch_lines]
                     _, batch_loss = self.sess.run([adversarial_optimizer, adversarial_optimizer_train_loss],
-                                                  feed_dict={self.eval_placeholder: batch_data})
+                                                  feed_dict={self.train_placeholder: batch_data})
                     sum_loss += batch_loss
 
                     # adversarial training
@@ -325,14 +325,14 @@ class Model:
                         batch_data = [se.get_adversarial_code() for se in batch_searchers]
                         batch_word_to_derive = [se.get_word_to_derive() for se in batch_searchers]
                         loss_of_input, grad_of_input = self.sess.run([self.loss_wrt_input,self.grad_wrt_input],
-                            feed_dict={self.eval_placeholder: batch_data, self.words_to_compute_grads: batch_word_to_derive})
+                            feed_dict={self.train_placeholder: batch_data, self.words_to_compute_grads: batch_word_to_derive})
                         for searcher, grads in zip(batch_searchers, grad_of_input):
                             searcher.next((0, "", grads))
 
                         batch_data = [c for se in batch_searchers
                                       for _, c in se.pop_unchecked_adversarial_code()]
                         _, batch_loss = self.sess.run([adversarial_optimizer, adversarial_optimizer_train_loss],
-                                                      feed_dict={self.eval_placeholder: batch_data})
+                                                      feed_dict={self.train_placeholder: batch_data})
                         sum_loss += batch_loss
 
                     # logging
