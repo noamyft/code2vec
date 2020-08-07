@@ -1,7 +1,6 @@
 from itertools import islice
 
 import tensorflow as tf
-from concurrent.futures import ThreadPoolExecutor
 
 import PathContextReader
 import numpy as np
@@ -15,8 +14,6 @@ from adversarialsearcher import AdversarialSearcher, AdversarialTargetedSearcher
     AdversarialSearcherTfidf, AdversarialTargetedSearcherTfidf
 import codeguard
 from codeguard import guard_by_n2p, guard_by_vunk
-from sklearn.decomposition import PCA
-import matplotlib.pyplot as plt
 import common_adversarial
 import re
 
@@ -361,9 +358,6 @@ class Model:
         print("Training time: %sH:%sM:%sS\n" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
 
     def guard_code_batch(self, batch, word_embeddings, threshold=0):
-        # with ThreadPoolExecutor(max_workers=13) as executor:
-        #     result = list(executor.map(lambda r: guard_by_n2p(r, lambda w: w in self.word_to_index),
-        #                                batch))
 
         # vunk
         # result = [guard_by_vunk(r) for r in batch]
@@ -375,155 +369,8 @@ class Model:
         result = [codeguard.guard_by_distance(r, lambda w: w in self.word_to_index,
                                               lambda w: word_embeddings[self.word_to_index[w]], threshold)
                   for r in batch]
-
-        # cluster
-        # result = [guard_by_pca(r, lambda w: w in self.word_to_index,
-        #                        lambda w: self.get_words_vocab_embed(w)) for r in batch]
         return result
 
-    def creat_PCA_tokens(self, code_sample_with_vars):
-        variables, code = common_adversarial.separate_vars_code(code_sample_with_vars)
-        variables = common_adversarial.get_all_vars(variables)
-        tokens = common_adversarial.get_all_tokens(code)
-
-        word_embeddings = self.get_words_vocab_embed()
-        is_word_in_vocab_func = lambda w: w in self.word_to_index
-        get_embed_func = lambda w: word_embeddings[self.word_to_index[w]]
-
-        both = list(set(variables + list(tokens)))
-
-        # both = variables
-
-        exist_tokens = [v for v in both if is_word_in_vocab_func(v)]
-        exist_embed = [get_embed_func(v) for v in exist_tokens]
-
-        pca = PCA(n_components=2)
-        principalComponents = pca.fit_transform(exist_embed)
-
-        # scatter not-variables
-        al = 0.5
-        size = 70
-        for (x, y), name in zip(principalComponents, exist_tokens):
-            if name not in variables:
-                plt.scatter(x, y, label=name, alpha=al, edgecolors='none')
-        # scatter variables
-        al = 1
-        size = 100
-        for (x, y), name in zip(principalComponents, exist_tokens):
-            if name in variables:
-                name = name + " (VAR)"
-                plt.scatter(x, y, label=name, alpha=al, s=size, edgecolors='none')
-
-        plt.title(code.split(" ")[0])
-        plt.legend()
-
-        plt.savefig("pca_of_input.png")
-        plt.clf()
-
-    # def evaluate_folder(self):
-    #     eval_start_time = time.time()
-    #     if self.eval_queue is None:
-    #         self.eval_queue = PathContextReader.PathContextReader(word_to_index=self.word_to_index,
-    #                                                               path_to_index=self.path_to_index,
-    #                                                               target_word_to_index=self.target_word_to_index,
-    #                                                               config=self.config, is_evaluating=True)
-    #         self.eval_placeholder = self.eval_queue.get_input_placeholder()
-    #         self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op, _, _, _, _ = \
-    #             self.build_test_graph(self.eval_queue.get_filtered_batches())
-    #         self.saver = tf.train.Saver()
-    #
-    #     if self.config.LOAD_PATH and not self.config.TRAIN_PATH:
-    #         self.initialize_session_variables(self.sess)
-    #         self.load_model(self.sess)
-    #         if self.config.RELEASE:
-    #             release_name = self.config.LOAD_PATH + '.release'
-    #             print('Releasing model, output model: %s' % release_name )
-    #             self.saver.save(self.sess, release_name )
-    #             return None
-    #
-    #     subdirectories = next(os.walk(self.config.TEST_PATH))[1]
-    #     print("total methods to test:", len(subdirectories))
-    #     results = {}
-    #     for dir in subdirectories:
-    #         dirname = dir
-    #         dir = self.config.TEST_PATH + "/" + dir
-    #         try:
-    #             # original_results = self.evaluate_file(dir + "/original.test.c2v")
-    #             samples = {}
-    #             onlyfiles = [f for f in os.listdir(dir) if os.path.isfile(os.path.join(dir, f))]
-    #             for f in onlyfiles:
-    #                 samples[f] = self.evaluate_file(dir + "/" + f)
-    #
-    #             results[dir] = samples
-    #         except Exception as ex:
-    #             print("ERROR! Cant parse folder: cp -r ", dir, " tt/", dirname)
-    #             # print(ex)
-    #             del self.eval_data_lines
-    #             self.eval_data_lines = None
-    #
-    #     elapsed = int(time.time() - eval_start_time)
-    #     print("Evaluation time: %sH:%sM:%sS" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
-    #     return results
-    #
-    # def evaluate_file(self, file):
-    #     results = []
-    #     if self.eval_data_lines is None:
-    #         print('Loading test data from: ' + file)
-    #         self.eval_data_lines = common.load_file_lines(file)
-    #         print('Done loading test data')
-    #     with open('log.txt', 'w') as output_file:
-    #         num_correct_predictions = np.zeros(self.topk)
-    #         total_predictions = 0
-    #         total_prediction_batches = 0
-    #         true_positive, false_positive, false_negative = 0, 0, 0
-    #         start_time = time.time()
-    #
-    #         for batch in common.split_to_batches(self.eval_data_lines, 1):
-    #             num_correct_predictions = np.zeros(self.topk)
-    #             total_predictions = 0
-    #
-    #             true_positive, false_positive, false_negative = 0, 0, 0
-    #
-    #             top_words, top_scores, original_names = self.sess.run(
-    #                 [self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op],
-    #                 feed_dict={self.eval_placeholder: batch})
-    #             top_words, original_names = common.binary_to_string_matrix(top_words), common.binary_to_string_matrix(
-    #                 original_names)
-    #             # Flatten original names from [[]] to []
-    #             original_names = [w for l in original_names for w in l]
-    #
-    #             num_correct_predictions = self.update_correct_predictions(num_correct_predictions, output_file,
-    #                                                                       zip(original_names, top_words))
-    #             true_positive, false_positive, false_negative = self.update_per_subtoken_statistics(
-    #                 zip(original_names, top_words),
-    #                 true_positive, false_positive, false_negative)
-    #
-    #             total_predictions += len(original_names)
-    #             total_prediction_batches += 1
-    #
-    #             # zip each prediction with its score
-    #             top_scores_aslist = top_scores.tolist()
-    #             top_words_with_scores = []
-    #             for i in range(len(top_words)):
-    #                 top_words_with_scores.append(list(zip(top_words[i],top_scores_aslist[i])))
-    #
-    #             results.append({"TP":true_positive, "FP":false_positive, "FN":false_negative,
-    #                             "num_correct_predictions": num_correct_predictions,
-    #                             "total_predictions":total_predictions,
-    #                             "top_words_with_scores": top_words_with_scores})
-    #             if total_prediction_batches % self.num_batches_to_log == 0:
-    #                 elapsed = time.time() - start_time
-    #                 # start_time = time.time()
-    #                 self.trace_evaluation(output_file, num_correct_predictions, total_predictions, elapsed,
-    #                                       len(self.eval_data_lines))
-    #
-    #         print('Done testing, epoch reached')
-    #         output_file.write(str(num_correct_predictions / total_predictions) + '\n')
-    #
-    #     # precision, recall, f1 = self.calculate_results(true_positive, false_positive, false_negative)
-    #     del self.eval_data_lines
-    #     self.eval_data_lines = None
-    #     return results
 
     def create_ordered_words_dictionary(self, data_path, top_words):
         with open('{}.dict.c2v'.format(data_path), 'rb') as file:
@@ -948,10 +795,6 @@ class Model:
 
             grad_of_input = tf.matmul(grad_word_embed, partial_words_vocab, transpose_b=True)
 
-            # grad_of_input = tf.contrib.eager.py_func(my_py_func,
-            #                                          [grad_word_embed, path_source_target_tensor, words_to_compute_grads, partial_words_vocab],
-            #                                          tf.float32)
-
             if topk_results is None:
                 batched_grad_of_source_input = grad_of_input
             else:
@@ -1078,17 +921,6 @@ class Model:
             loss =    tf.nn.sparse_softmax_cross_entropy_with_logits(
                 labels=tf.reshape(words_input_index, [-1]),
                 logits=logits)
-            # ) / batch_size
-
-            # loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(
-            #     labels=tf.reshape(words_input_index, [-1]),
-            #     logits=logits)) / batch_size \
-            #        -tf.nn.sparse_softmax_cross_entropy_with_logits(
-            #     labels=tf.constant(self.target_word_to_index["bubble|sort"], shape=[1]),
-            #     logits=logits) \
-            #        -tf.nn.sparse_softmax_cross_entropy_with_logits(
-            #     labels=tf.constant(self.target_word_to_index["sort"], shape=[1]),
-            #     logits=logits)
 
             grad = tf.gradients([loss], [source_word_embed, target_word_embed])
             grad_source_word_embed, grad_target_word_embed = grad
@@ -1104,7 +936,6 @@ class Model:
                     axis=1))
 
             # create vocab for adversarial (by given words)
-            ##deprecated: grad_word_embed = tf.reshape(grad_word_embed, [-1, self.config.EMBEDDINGS_SIZE])
             partial_words_vocab = tf.gather(words_vocab, [self.word_to_index[w] for w in adversary_words_in_vocab])
 
             # filter only given vars
@@ -1114,10 +945,6 @@ class Model:
 
             grad_of_input = tf.matmul(grad_word_embed, partial_words_vocab, transpose_b=True)
 
-            # grad_of_input = tf.contrib.eager.py_func(my_py_func,
-            #                                          [grad_word_embed, path_source_target_tensor, words_to_compute_grads, partial_words_vocab],
-            #                                          tf.float32)
-
             if topk_results is None:
                 batched_grad_of_source_input = grad_of_input
             else:
@@ -1126,10 +953,6 @@ class Model:
                 values = tf.concat([top_values, -bottom_values], axis=-1)
                 indices = tf.concat([top_indices, bottom_indices], axis=-1)
                 batched_grad_of_source_input = tf.stack([tf.cast(indices, tf.float32), values], axis=1)
-
-            # max_contexts = self.config.MAX_CONTEXTS
-            # batched_grad_of_source_input = tf.reshape(grad_of_input,
-            #                                           [-1, 2 * max_contexts, partial_words_vocab.shape[0]])
 
         return loss, batched_grad_of_source_input, original_words, original_words_index
 
@@ -1155,7 +978,6 @@ class Model:
         results = []
         for batch in common.split_to_batches(predict_data_lines, 1):
             if guard_input is not None:
-                # TODO: debug this
                 batch = self.guard_code_batch(batch, word_embeddings, guard_input)
 
             top_words, top_scores, original_names, attention_weights, source_strings, path_strings, target_strings = self.sess.run(
