@@ -868,6 +868,7 @@ class Model:
                                                         adversary_words_in_vocab, words_to_compute_grads,
                                                         topk_results = None):
         words_to_compute_grads = tf.reshape(words_to_compute_grads, [-1, 1])
+        # with tf.variable_scope('model', reuse=tf.AUTO_REUSE):
         with tf.variable_scope('model'):
             words_vocab = tf.get_variable('WORDS_VOCAB', shape=(self.word_vocab_size + 1, self.config.EMBEDDINGS_SIZE),
                                           dtype=tf.float32,
@@ -978,10 +979,9 @@ class Model:
             context_embed = tf.nn.dropout(context_embed, keep_prob1)
 
         flat_embed = tf.reshape(context_embed, [-1, self.config.EMBEDDINGS_SIZE * 3])  # (batch * max_contexts, dim * 3)
-        with tf.variable_scope('model', reuse=tf.AUTO_REUSE):
-            transform_param = tf.get_variable('TRANSFORM',
-                                              shape=(self.config.EMBEDDINGS_SIZE * 3, self.config.EMBEDDINGS_SIZE * 3),
-                                              dtype=tf.float32)
+        transform_param = tf.get_variable('TRANSFORM',
+                                          shape=(self.config.EMBEDDINGS_SIZE * 3, self.config.EMBEDDINGS_SIZE * 3),
+                                          dtype=tf.float32)
 
         flat_embed = tf.tanh(tf.matmul(flat_embed, transform_param))  # (batch * max_contexts, dim * 3)
 
