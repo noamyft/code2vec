@@ -204,24 +204,6 @@ class Model:
                     zip(original_names, top_words),
                     true_positive, false_positive, false_negative)
 
-                # for l, original, predicted in zip(original_batch, original_names, top_words):
-                #     v, c = common_adversarial.separate_vars_code(l)
-                #     v = common_adversarial.get_all_vars(v)
-                #     t = common_adversarial.get_all_tokens(c)
-                #     t.update(v)
-                #     # ratio = round(100*len(v)/len(t), 2)
-                #     ratio = len(v)
-                #     if ratio not in measure_by_percentage:
-                #         measure_by_percentage[ratio] = {"TP":0, "FP":0, "FN":0, "CNT": 0}
-                #     measure_by_percentage[ratio]["TP"], \
-                #     measure_by_percentage[ratio]["FP"], \
-                #     measure_by_percentage[ratio]["FN"] = self.update_per_subtoken_statistics(
-                #         [(original, predicted)],
-                #         measure_by_percentage[ratio]["TP"],
-                #         measure_by_percentage[ratio]["FP"],
-                #         measure_by_percentage[ratio]["FN"])
-                #     measure_by_percentage[ratio]["CNT"] += 1
-
                 total_predictions += len(original_names)
                 total_prediction_batches += 1
                 if total_prediction_batches % self.num_batches_to_log == 0:
@@ -232,11 +214,7 @@ class Model:
             print('Done testing, epoch reached')
             output_file.write(str(num_correct_predictions / total_predictions) + '\n')
 
-        # precision_var_above0, recall_var_above0, f1_var_above0 = \
-        #     self.calculate_results(true_positive - measure_by_percentage[0]["TP"],
-        #                            false_positive - measure_by_percentage[0]["FP"],
-        #                            false_negative - measure_by_percentage[0]["FN"])
-        # print('Measurement for var count above 0:: Precision: ' + str(precision_var_above0) + ', recall: ' + str(recall_var_above0) + ', F1: ' + str(f1_var_above0))
+
         elapsed = int(time.time() - eval_start_time)
         precision, recall, f1 = self.calculate_results(true_positive, false_positive, false_negative)
         print("Evaluation time: %sH:%sM:%sS" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
