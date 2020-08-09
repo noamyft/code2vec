@@ -380,11 +380,13 @@ class Model:
         return word_to_indextop, indextop_to_word
 
     def evaluate_and_adverse(self, depth, topk, targeted_attack, adversarial_target_word,
-                             deadcode_attack, guard_input = None, adverse_TP_only = True):
+                             deadcode_attack, guard_input = None, adverse_TP_only = True, data_dict_path = None):
 
         topk_words_from_model = 100
+        data_dict_path = data_dict_path if data_dict_path is not None else \
+            Model.get_data_dictionaries_path(self.config.LOAD_PATH)
         word_to_indextop, indextop_to_word  = self.create_ordered_words_dictionary(
-            Model.get_data_dictionaries_path(self.config.LOAD_PATH),
+            data_dict_path,
             self.config.MAX_WORDS_FROM_VOCAB_FOR_ADVERSARIAL)
 
         eval_start_time = time.time()

@@ -35,6 +35,9 @@ if __name__ == '__main__':
                         help="set this flag to use input guard",
                         required=False)
 
+    parser.add_argument("-ldict", "--load_dict", dest="load_dict_path",
+                        help="path to dict file", metavar="FILE", required=False)
+
     is_training = '--train' in sys.argv or '-tr' in sys.argv
     parser.add_argument("-s", "--save", dest="save_path",
                         help="path to save file", metavar="FILE", required=False)
@@ -87,7 +90,8 @@ if __name__ == '__main__':
                                                       targeted_attack=args.adversarial_type=="targeted",
                                                       adversarial_target_word=args.adversarial_target,
                                                       deadcode_attack=args.adversarial_deadcode,
-                                                      guard_input=args.guard_input)
+                                                      guard_input=args.guard_input,
+                                                      data_dict_path=args.load_dict_path)
             with open("total_adversarial_results_" + config.TEST_PATH.replace("/", "").replace("\\", "") + ".pickle",
                       'wb') as handle:
                 pickle.dump(eval_results, handle)
