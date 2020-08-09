@@ -34,7 +34,7 @@ On Ubuntu:
 ## Quickstart
 ### Step 0: Cloning this repository
 ```
-git clone https://github.com/tech-srl/code2vec
+git clone https://github.com/noamyft/code2vec.git
 cd code2vec
 ```
 
@@ -47,7 +47,7 @@ We provided a preprocessed dataset (based on [Uri Alon's Java-large dataset](htt
 
 First, you should download and extract the preprocessed datasets below in the dir created earlier:
 
-* [dataset for VarName & Deadcode atack](https://drive.google.com/file/d/1_LYM_9Iw5uVVbPzV3mEcmaw0u8xdbjBW/view?usp=sharing)
+* [dataset for VarName & Deadcode atack](https://drive.google.com/file/d/1ovS9q8GPPChHuEGErPdG-qs61-oTtPW-/view?usp=sharing)
 
 Then extract it:
 ```
