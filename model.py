@@ -582,7 +582,7 @@ class Model:
 
                 batch_searchers = new_batch_searchers
 
-                if i % 10 == 0: #self.num_batches_to_log == 0:
+                if i % self.num_batches_to_log == 0:
                     print("batch:", i, "processed:", processed, "(excluded:", excluded, "trivial:", trivial, ")",
                           "fools: " + str(total_fools) + " fail to fool: " + str(total_failed) +
                           " success rate: {:.2f}%".format(100 * total_fools / (total_fools+total_failed)
