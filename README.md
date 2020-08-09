@@ -7,9 +7,7 @@ Noam Yefet, [Uri Alon](http://urialon.cswp.cs.technion.ac.il) and [Eran Yahav](h
 "Adversarial Examples for Models of Code", 2019 
 https://arxiv.org/abs/1910.07517
 
-_**October 2018** - the paper was accepted to [POPL'2019](https://popl19.sigplan.org)_!
-
-An **online demo** is available at [https://code2vec.org/](https://code2vec.org/).
+<!-- _**October 2018** - the paper was accepted to [POPL'2019](https://popl19.sigplan.org)_! -->
 
 This is a TensorFlow implementation , designed to be easy and useful in research, 
 and for experimenting with new ideas for attacks in machine learning for code tasks.
@@ -140,6 +138,29 @@ python3 code2vec.py --load models/java14m/saved_model_iter8 --predict
 After the model loads, follow the instructions and edit the file Input.java and enter a Java 
 method or code snippet, and examine the model's predictions and attention scores.
 -->
+
+### Manually examine adversarial examples
+You can run the examples we provided in the paper on the Code2vec's **online demo**. available at [https://code2vec.org/](https://code2vec.org/).
+
+* You can copy&paste the sort example from [here](https://drive.google.com/file/d/1ahw70BL5BNYvtejLJPuT2f_MWhjKMqmj/view?usp=sharing)
+
+* you can type the following code in each example to get Prediction of sort:
+```
+int introsorter = 0;
+```
+
+## Defense
+
+You can run the Outlier Detection defense by adding the _--guard_input_ with threshold to either:
+* regular evaluation, e.g. :
+```
+python3 code2vec.py --load models/java-large/saved_model_iter3 --test data/java_large_adversarial/java_large_adversarial.test.c2v --guard_input 2.7
+```
+
+* adversarial evaluation. e.g.:
+```
+python3 code2vec.py --load models/java-large/saved_model_iter3 --load_dict data/java_large_adversarial/java-large --test data/java_large_adversarial/java_large_adversarial.test.c2v --test_adversarial --adversarial_type targeted --adversarial_target add --guard_input 2.7
+```
 
 ## Configuration
 Changing hyper-parameters is possible by editing the file [config.py](config.py).
