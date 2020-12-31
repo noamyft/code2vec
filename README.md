@@ -1,3 +1,5 @@
+**THIS IS A DEPRECATED REPOSITORY. PLEASE REFER TO [THIS LINK](https://github.com/tech-srl/adversarial-examples).**
+
 # Adversarial Examples for Models of Code - Code2vec
 
 An adversary for Code2vec - neural network for learning distributed representations of code.
