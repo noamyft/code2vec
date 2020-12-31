@@ -47,7 +47,7 @@ We provided a preprocessed dataset (based on [Uri Alon's Java-large dataset](htt
 
 First, you should download and extract the preprocessed datasets below in the dir created earlier:
 
-* [dataset for VarName & Deadcode atack](https://drive.google.com/file/d/1ovS9q8GPPChHuEGErPdG-qs61-oTtPW-/view?usp=sharing)
+* [dataset for VarName & Deadcode atack](https://adversarial-examples.s3.amazonaws.com/adversarial+for+code2vec/java_large_adversarial_data.tar.gz)
 
 Then extract it:
 ```
@@ -142,7 +142,7 @@ method or code snippet, and examine the model's predictions and attention scores
 ### Manually examine adversarial examples
 You can run the examples we provided in the paper on the Code2vec's **online demo**. available at [https://code2vec.org/](https://code2vec.org/).
 
-* You can copy&paste the sort example from [here](https://drive.google.com/file/d/1ahw70BL5BNYvtejLJPuT2f_MWhjKMqmj/view?usp=sharing)
+* You can copy&paste the sort example from [here](https://adversarial-examples.s3.amazonaws.com/adversarial+for+code2vec/sort_adversarial_example.txt)
 
 * you can type the following code in each example to get Prediction of sort:
 ```
